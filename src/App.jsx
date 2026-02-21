@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc } from "firebase/firestore";
 
 // Firebase Config
 const firebaseConfig = {
@@ -49,6 +49,7 @@ export default function App(){
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState("dashboard");
   const [form, setForm] = useState(null);
+  const [selected, setSelected] = useState(null);
   const [notif, setNotif] = useState(null);
   const [tick, setTick] = useState(nowFull());
   const [filterP, setFilterP] = useState("");
@@ -87,6 +88,19 @@ export default function App(){
   }
 
   function showNotif(msg,type="success"){ setNotif({msg,type}); setTimeout(()=>setNotif(null),3500); }
+
+  async function deleteEntry(entry){
+    if(!confirm(`⚠️ Delete entry ${entry.id}?\n\nVehicle: ${entry.vehicleNo}\nParty: ${entry.partyName}\n\nThis cannot be undone!`)) return;
+    setSaving(true);
+    try{
+      await deleteDoc(doc(db, "entries", entry.firestoreId));
+      showNotif(`✓ Entry ${entry.id} deleted`);
+    } catch(e){
+      console.error('Delete error:', e);
+      showNotif("Failed to delete entry","error");
+    }
+    setSaving(false);
+  }
 
   function startNew(){
     setForm({ step:1, id:genId(entries.length+1), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
@@ -234,7 +248,11 @@ export default function App(){
                           <td style={{...td,textAlign:"right",fontWeight:700}}>{kg(e.netWeight)}</td>
                           <td style={td}><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
                           <td style={td}><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
-                          <td style={td}>{e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}</td>
+                          <td style={{...td,whiteSpace:"nowrap"}}>
+                            {e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}
+                            {e.status==="Completed"&&<button style={{...actBtn,marginRight:5}} onClick={()=>{setSelected(e);setPage("view");}}>View</button>}
+                            <button style={{...actBtnRed,marginLeft:5}} onClick={()=>deleteEntry(e)}>🗑 Delete</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -319,6 +337,79 @@ export default function App(){
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {page==="view"&&selected&&(
+          <div style={{maxWidth:820,margin:"0 auto"}}>
+            <button style={bkBtn} onClick={()=>setPage("dashboard")}>← Dashboard</button>
+            <div style={{background:C.card,borderRadius:12,padding:"24px"}}>
+              <div style={{fontSize:18,fontWeight:800,marginBottom:4,color:"#1e40af"}}>{selected.id}</div>
+              <div style={{fontSize:12,color:C.muted,marginBottom:20}}>{fmtDate(selected.date)} • {selected.vehicleNo} • {selected.partyName}</div>
+              
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Vehicle Number</div>
+                  <div style={{fontSize:14,fontWeight:700,fontFamily:C.mono}}>{selected.vehicleNo}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Party Name</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.partyName}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Gross In Time</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.grossTime}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Empty Out Time</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.emptyTime||"—"}</div>
+                </div>
+              </div>
+
+              <div style={{fontSize:14,fontWeight:700,marginBottom:12,color:"#dc2626"}}>⚖ Weight Details</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20,background:"#0f172a",padding:"16px",borderRadius:10}}>
+                {[{l:"Party Wt",v:kg(selected.partyWeight),c:"#f8fafc"},{l:"Gross Wt",v:kg(selected.ourGrossWeight),c:"#93c5fd"},{l:"Empty Wt",v:kg(selected.ourEmptyWeight),c:"#fca5a5"},{l:"Net Wt",v:kg(selected.netWeight),c:"#86efac"}].map(w=>(
+                  <div key={w.l} style={{textAlign:"center"}}>
+                    <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:4}}>{w.l}</div>
+                    <div style={{fontSize:18,fontWeight:800,color:w.c}}>{w.v}</div>
+                    <div style={{fontSize:9,color:"#64748b"}}>kg</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{fontSize:14,fontWeight:700,marginBottom:12,color:"#dc2626"}}>🔬 Quality Report</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+                <div style={{background:"#eff6ff",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Material Grade</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#1e40af"}}>{selected.materialGrade||"—"}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Moisture</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.moisture||"—"}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Contamination</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.contamination||"—"}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Fiber Quality</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.fiberQuality||"—"}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Quality Checker</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.qualityChecker||"—"}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"12px"}}>
+                  <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",marginBottom:4}}>Weighment By</div>
+                  <div style={{fontSize:14,fontWeight:700}}>{selected.weighmentPerson||"—"}</div>
+                </div>
+              </div>
+
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <button style={secondaryBtn} onClick={()=>setPage("dashboard")}>Close</button>
+                <button style={{...actBtnRed,padding:"10px 20px",fontSize:13}} onClick={()=>{deleteEntry(selected);setPage("dashboard");}}>🗑 Delete Entry</button>
+              </div>
             </div>
           </div>
         )}
