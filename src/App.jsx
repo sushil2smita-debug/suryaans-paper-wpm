@@ -1,0 +1,339 @@
+import { useState, useEffect } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
+
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAcJVPE-Rvi67n-GconR76PD66Yv1MB1Ak",
+  authDomain: "suryaans-paper.firebaseapp.com",
+  projectId: "suryaans-paper",
+  storageBucket: "suryaans-paper.firebasestorage.app",
+  messagingSenderId: "477896330801",
+  appId: "1:477896330801:web:3b64bec4ce173011768f10"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","J.B Traders","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
+const QUALITY_CHECKERS = ["Sushil","Amit","Milan","Dhirendar","GS Dubey","Ajay Singh","Surajit"];
+const WEIGHMENT_PERSONS = ["Sushil","Amit","Milan","Security","Surajit"];
+const MATERIAL_GRADES = ["Local Waste paper Cuttings","Local waste paper Box","Sack Kraft (SMK)","DSOCC","NDLKC","Fruit Box","Tabocco Box","OCC 98/2","OCC","DSOCC Wallmart","DSOCC Shoprite","Industrial box","Sack Kraft","Shopping Bag"];
+const MOISTURE_OPT = ["< 10%","10–12%","12–15%","15–18%","> 18%"];
+const CONTAM_OPT = ["Nil","< 1%","1–2%","2–5%","> 5%"];
+const FIBER_OPT = ["Excellent","Good","Average","Below Average","Poor"];
+
+const STATUS_META = {
+  "Gross Weighment Done": { bg:"#fff7e6", text:"#92400e", border:"#fbbf24", dot:"#f59e0b" },
+  "Quality Checked": { bg:"#eff6ff", text:"#1e40af", border:"#93c5fd", dot:"#3b82f6" },
+  "Completed": { bg:"#f0fdf4", text:"#14532d", border:"#86efac", dot:"#22c55e" },
+};
+
+const COMPANY = {
+  name: "SURYAANS PAPER",
+  addr1: "312/2C, Thervoy Kandigai Village, Gummudipundi Taluk",
+  addr2: "Thiruvillur Dist, Tamilnadu — 601202 (India)",
+  creator: "SUSHIL",
+};
+
+function nowDate(){ return new Date().toISOString().split("T")[0]; }
+function nowTime(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true}); }
+function nowFull(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}); }
+function genId(n){ return `WP-${new Date().getFullYear()}-${String(n).padStart(4,"0")}`; }
+function kg(n){ return n!=null&&n!==undefined ? Number(n).toLocaleString("en-IN") : "—"; }
+function fmtDate(d){ if(!d) return "—"; const p=d.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }
+
+export default function App(){
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState("dashboard");
+  const [form, setForm] = useState(null);
+  const [notif, setNotif] = useState(null);
+  const [tick, setTick] = useState(nowFull());
+  const [filterP, setFilterP] = useState("");
+  const [partyFilter, setPartyFilter] = useState("");
+
+  useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
+
+  useEffect(()=>{
+    const q = query(collection(db, "entries"), orderBy("savedAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ firestoreId: doc.id, ...doc.data() }));
+      setEntries(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Firebase error:", error);
+      showNotif("Failed to connect to Firebase","error");
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  async function saveEntry(entry){
+    setSaving(true);
+    try{
+      if(entry.firestoreId){
+        const docRef = doc(db, "entries", entry.firestoreId);
+        await updateDoc(docRef, entry);
+      } else {
+        await addDoc(collection(db, "entries"), entry);
+      }
+    } catch(e){
+      console.error('Save error:', e);
+      showNotif("Failed to save to Firebase","error");
+    }
+    setSaving(false);
+  }
+
+  function showNotif(msg,type="success"){ setNotif({msg,type}); setTimeout(()=>setNotif(null),3500); }
+
+  function startNew(){
+    setForm({ step:1, id:genId(entries.length+1), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
+    setPage("form");
+  }
+
+  async function step1SaveDraft(){
+    const {vehicleNo,partyName,partyWeight,ourGrossWeight,weighmentPerson}=form;
+    if(!vehicleNo||!partyName||!partyWeight||!ourGrossWeight||!weighmentPerson) return showNotif("Please fill all required fields","error");
+    const draft={...form,ourEmptyWeight:null,netWeight:null,weightDiff:null,status:"Gross Weighment Done",savedAt:new Date().toISOString()};
+    await saveEntry(draft);
+    showNotif(`Draft saved — ${form.id}`);
+    setForm(f=>({...f,step:2}));
+  }
+
+  function step2Next(){
+    const {materialGrade,moisture,contamination,fiberQuality,qualityChecker}=form;
+    if(!materialGrade||!moisture||!contamination||!fiberQuality||!qualityChecker) return showNotif("Please complete quality report","error");
+    setForm(f=>({...f,step:3}));
+  }
+
+  async function step3Finish(){
+    if(!form.ourEmptyWeight||!form.weighmentPerson) return showNotif("Please enter empty weight","error");
+    const gross=parseFloat(form.ourGrossWeight),empty=parseFloat(form.ourEmptyWeight);
+    if(empty>=gross) return showNotif("Empty weight cannot be ≥ Gross weight","error");
+    const net=gross-empty,diff=parseFloat(form.partyWeight)-net;
+    const entry={...form,emptyTime:nowTime(),ourEmptyWeight:empty,ourGrossWeight:gross,partyWeight:parseFloat(form.partyWeight),netWeight:net,weightDiff:diff,status:"Completed",savedAt:new Date().toISOString()};
+    const existing = entries.find(e => e.id === entry.id);
+    if(existing) entry.firestoreId = existing.firestoreId;
+    await saveEntry(entry);
+    showNotif(`✓ Entry ${form.id} completed!`);
+    setPage("dashboard");
+  }
+
+  function resume(entry){
+    setForm({...entry,step:entry.status==="Gross Weighment Done"?2:3,ourEmptyWeight:entry.ourEmptyWeight||""});
+    setPage("form");
+  }
+
+  const filtered=entries.filter(e=>filterP?e.partyName.toLowerCase().includes(filterP.toLowerCase()):true);
+  const today=nowDate();
+  const todayEnt=entries.filter(e=>e.date===today);
+  const pendingCount=entries.filter(e=>e.status!=="Completed").length;
+  const totalNetMT=entries.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
+  const todayNetMT=todayEnt.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
+
+  const C={bg:"#f1f5f9",card:"#fff",dark:"#0f172a",mid:"#334155",muted:"#64748b",border:"#e2e8f0",font:"'IBM Plex Sans','Segoe UI',system-ui,sans-serif",mono:"'IBM Plex Mono','Courier New',monospace"};
+  const badge=(st)=>{ const m=STATUS_META[st]||STATUS_META["Completed"]; return{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:20,fontSize:10.5,fontWeight:700,background:m.bg,color:m.text,border:`1px solid ${m.border}`}; };
+  const bDot=(st)=>({width:6,height:6,borderRadius:"50%",background:(STATUS_META[st]||STATUS_META["Completed"]).dot});
+
+  function ChipGroup({label,opts,val,onChange}){
+    return <div style={{display:"flex",flexDirection:"column",gap:5,gridColumn:"1/-1"}}>
+      <label style={{fontSize:11,fontWeight:700,color:C.mid}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+        {opts.map(o=><div key={o} onClick={()=>onChange(o)} style={{border:`2px solid ${val===o?"#1e40af":C.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",background:val===o?"#eff6ff":"#f8fafc",fontSize:12,fontWeight:val===o?700:400,color:val===o?"#1e40af":C.mid,transition:"all .15s",minWidth:80}}>{o}</div>)}
+      </div>
+    </div>;
+  }
+
+  function FSel({label,val,onChange,opts,full,filterId}){
+    const filter=filterId==="party"?partyFilter:"";
+    const setFilter=filterId==="party"?setPartyFilter:()=>{};
+    const letters=[...new Set(opts.map(o=>o.charAt(0).toUpperCase()))].sort();
+    const filtered = filter ? opts.filter(o=>o.toUpperCase().startsWith(filter)) : opts;
+    
+    return <div style={{display:"flex",flexDirection:"column",gap:6,...(full?{gridColumn:"1/-1"}:{}),background:"#f8fafc",padding:"12px",borderRadius:10,border:"1px solid #e2e8f0"}}>
+      <label style={{fontSize:12,fontWeight:800,color:C.dark}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
+      <div style={{background:val?"#10b981":"#fff",border:`2px solid ${val?"#059669":"#e2e8f0"}`,borderRadius:8,padding:"12px 14px",minHeight:48,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span style={{fontSize:14,fontWeight:val?700:400,color:val?"#fff":"#94a3b8"}}>{val?`✓ ${val}`:"Click letter, then select"}</span>
+        {val&&<button onClick={()=>{onChange("");setFilter("");}} style={{background:"#fff",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>✕</button>}
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"8px 0",borderBottom:"1px solid #e2e8f0"}}>
+        <button onClick={()=>setFilter("")} style={{padding:"6px 12px",borderRadius:6,border:filter===""?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===""?"#eff6ff":"#fff",color:filter===""?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:50}}>ALL</button>
+        {letters.map(l=><button key={l} onClick={()=>setFilter(l)} style={{padding:"6px 12px",borderRadius:6,border:filter===l?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===l?"#eff6ff":"#fff",color:filter===l?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:36}}>{l}</button>)}
+      </div>
+      <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"scroll"}}>
+        {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:14}}>No parties starting with "{filter}"</div>}
+        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
+      </div>
+      <div style={{fontSize:12,color:"#64748b"}}>{filtered.length} of {opts.length} shown</div>
+    </div>;
+  }
+
+  const inp = {border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none",background:"#f8fafc",color:C.dark,width:"100%",boxSizing:"border-box"};
+  const roInp = {...inp,background:"#eef2f7",color:C.muted};
+  const primaryBtn = {background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"11px 28px",fontSize:13,fontWeight:700,cursor:"pointer"};
+  const secondaryBtn = {background:"#f1f5f9",color:C.mid,border:`1.5px solid ${C.border}`,borderRadius:8,padding:"11px 20px",fontSize:13,fontWeight:600,cursor:"pointer"};
+  const greenBtn = {background:"#15803d",color:"#fff",border:"none",borderRadius:8,padding:"11px 28px",fontSize:13,fontWeight:700,cursor:"pointer"};
+  const newBtn = {background:"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5};
+  const navBtn=(a)=>({padding:"7px 14px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,background:a?"#dc2626":"#1e293b",color:a?"#fff":"#94a3b8"});
+  const bkBtn = {background:"none",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,cursor:"pointer",color:C.mid,display:"flex",alignItems:"center",gap:6,marginBottom:18};
+  const actBtn = {padding:"4px 11px",borderRadius:6,border:`1.5px solid ${C.border}`,background:"#fff",cursor:"pointer",fontSize:11,color:C.dark,fontWeight:600};
+  const actBtnRed = {padding:"4px 11px",borderRadius:6,border:"1.5px solid #fecaca",background:"#fff1f1",cursor:"pointer",fontSize:11,color:"#dc2626",fontWeight:600};
+  const th = {background:"#f8fafc",padding:"9px 12px",textAlign:"left",fontWeight:700,color:C.muted,fontSize:10,textTransform:"uppercase",borderBottom:`2px solid ${C.border}`};
+  const td = {padding:"11px 12px",borderBottom:`1px solid #f1f5f9`,color:C.dark,verticalAlign:"middle"};
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.dark}}>
+      <style>{`input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}button:active{transform:scale(.98);}`}</style>
+      {notif&&<div style={{position:"fixed",top:72,right:20,background:notif.type==="success"?"#0f172a":"#dc2626",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:999,maxWidth:320}}>{notif.type==="success"?"✓ ":"⚠ "}{notif.msg}</div>}
+      {saving&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1e40af",color:"#fff",textAlign:"center",padding:"8px",fontSize:12,fontWeight:600}}>🔥 Syncing to Firebase...</div>}
+
+      <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",position:"sticky",top:0,zIndex:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#dc2626,#991b1b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>♻</div>
+          <div>
+            <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>{COMPANY.name} — RAWMATERIAL INWARD</div>
+            <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>Firebase Live Sync • {entries.length} Entries</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>📊 Dashboard</button>
+          <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}}>{tick}</div>
+          <button style={newBtn} onClick={startNew}>+ New</button>
+        </div>
+      </header>
+
+      <main style={{maxWidth:1180,margin:"0 auto",padding:"20px 16px"}}>
+        {page==="dashboard"&&(
+          <div>
+            <div style={{fontSize:20,fontWeight:800,marginBottom:18}}>{COMPANY.name} — Daily Register</div>
+            {loading?<div style={{textAlign:"center",padding:48,color:C.muted}}>⟳ Loading from Firebase...</div>:(
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:22}}>
+                  {[{l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626"},{l:"Pending",v:pendingCount,c:"#f59e0b"},{l:"Today Net (MT)",v:todayNetMT.toFixed(2),c:"#2563eb"},{l:"Total Net (MT)",v:totalNetMT.toFixed(2),c:"#16a34a"}].map(s=>(
+                    <div key={s.l} style={{background:C.card,borderRadius:12,padding:"18px 20px",borderTop:`3px solid ${s.c}`}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
+                      <div style={{fontSize:26,fontWeight:800}}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{background:C.card,borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 Entries</div>
+                  <input type="text" style={{...inp,width:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                    <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {filtered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
+                      {filtered.map(e=>(
+                        <tr key={e.id}>
+                          <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11}}>{e.id}</td>
+                          <td style={td}>{fmtDate(e.date)}</td>
+                          <td style={{...td,fontFamily:C.mono,fontWeight:700}}>{e.vehicleNo}</td>
+                          <td style={td}>{e.partyName}</td>
+                          <td style={{...td,textAlign:"right",fontWeight:700}}>{kg(e.netWeight)}</td>
+                          <td style={td}><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
+                          <td style={td}><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
+                          <td style={td}>{e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {page==="form"&&form&&(
+          <div style={{maxWidth:820,margin:"0 auto"}}>
+            <button style={bkBtn} onClick={()=>setPage("dashboard")}>← Back</button>
+            <div style={{background:C.card,borderRadius:12,padding:"24px"}}>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>🚛 New Inward — {form.id}</div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:20}}>Complete all 3 steps</div>
+              <div style={{display:"flex",borderRadius:10,overflow:"hidden",border:`1.5px solid ${C.border}`,marginBottom:24}}>
+                {[{n:1,lbl:"Gross"},{n:2,lbl:"Quality"},{n:3,lbl:"Empty"}].map((s,i)=>(
+                  <div key={s.n} style={{flex:1,padding:"10px 8px",textAlign:"center",fontSize:11,fontWeight:700,background:form.step>s.n?"#0f172a":form.step===s.n?"#dc2626":"#f8fafc",color:form.step>=s.n?"#fff":C.muted,borderRight:i<2?`1px solid ${C.border}`:"none"}}>{form.step>s.n?"✓ ":s.n+". "}{s.lbl}</div>
+                ))}
+              </div>
+
+              {form.step===1&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Entry Date*</label>
+                    <input style={inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Gross Time</label>
+                    <div style={roInp}>{form.grossTime}</div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Vehicle Number*</label>
+                    <input style={{...inp,textTransform:"uppercase",fontWeight:700}} value={form.vehicleNo} onChange={e=>setForm(f=>({...f,vehicleNo:e.target.value.toUpperCase()}))}/>
+                  </div>
+                  <FSel label="Party Name" val={form.partyName} onChange={v=>setForm(f=>({...f,partyName:v}))} opts={PARTIES} filterId="party"/>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Party Weight (kg)*</label>
+                    <input style={inp} type="number" value={form.partyWeight} onChange={e=>setForm(f=>({...f,partyWeight:e.target.value}))}/>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Our Gross (kg)*</label>
+                    <input style={inp} type="number" value={form.ourGrossWeight} onChange={e=>setForm(f=>({...f,ourGrossWeight:e.target.value}))}/>
+                  </div>
+                  <FSel label="Weighment By" val={form.weighmentPerson} onChange={v=>setForm(f=>({...f,weighmentPerson:v}))} opts={WEIGHMENT_PERSONS} full/>
+                  <div style={{gridColumn:"1/-1",display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+                    <button style={secondaryBtn} onClick={()=>setPage("dashboard")}>Cancel</button>
+                    <button style={primaryBtn} onClick={step1SaveDraft}>Save & Next →</button>
+                  </div>
+                </div>
+              )}
+
+              {form.step===2&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                  <FSel label="Material Grade" val={form.materialGrade} onChange={v=>setForm(f=>({...f,materialGrade:v}))} opts={MATERIAL_GRADES} full/>
+                  <ChipGroup label="Moisture" opts={MOISTURE_OPT} val={form.moisture} onChange={v=>setForm(f=>({...f,moisture:v}))}/>
+                  <ChipGroup label="Contamination" opts={CONTAM_OPT} val={form.contamination} onChange={v=>setForm(f=>({...f,contamination:v}))}/>
+                  <ChipGroup label="Fiber Quality" opts={FIBER_OPT} val={form.fiberQuality} onChange={v=>setForm(f=>({...f,fiberQuality:v}))}/>
+                  <FSel label="Quality Checker" val={form.qualityChecker} onChange={v=>setForm(f=>({...f,qualityChecker:v}))} opts={QUALITY_CHECKERS} full/>
+                  <div style={{gridColumn:"1/-1",display:"flex",gap:10,justifyContent:"space-between",marginTop:8}}>
+                    <button style={secondaryBtn} onClick={()=>setForm(f=>({...f,step:1}))}>← Back</button>
+                    <button style={primaryBtn} onClick={step2Next}>Next →</button>
+                  </div>
+                </div>
+              )}
+
+              {form.step===3&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Our Empty (kg)*</label>
+                    <input style={{...inp,fontWeight:700,fontSize:16}} type="number" value={form.ourEmptyWeight} onChange={e=>setForm(f=>({...f,ourEmptyWeight:e.target.value}))}/>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Empty Time</label>
+                    <div style={roInp}>{tick} (Auto)</div>
+                  </div>
+                  <FSel label="Weighment By" val={form.weighmentPerson} onChange={v=>setForm(f=>({...f,weighmentPerson:v}))} opts={WEIGHMENT_PERSONS} full/>
+                  <div style={{gridColumn:"1/-1",display:"flex",gap:10,justifyContent:"space-between",marginTop:8}}>
+                    <button style={secondaryBtn} onClick={()=>setForm(f=>({...f,step:2}))}>← Back</button>
+                    <button style={greenBtn} onClick={step3Finish}>✓ Complete</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+
+      <footer style={{background:"#0f172a",borderTop:"1px solid #1e293b",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{color:"#f8fafc",fontWeight:800,fontSize:13}}>{COMPANY.name}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{COMPANY.addr1}, {COMPANY.addr2}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#475569",fontSize:10,textTransform:"uppercase"}}>Firebase Real-time Sync</div>
+          <div style={{color:"#334155",fontSize:11,marginTop:3}}>By <span style={{color:"#dc2626",fontWeight:700}}>{COMPANY.creator}</span></div>
+        </div>
+      </footer>
+    </div>
+  );
+}
