@@ -119,14 +119,18 @@ export default function App(){
         const {firestoreId, ...data} = entry;
         const docRef = doc(db, "entries", firestoreId);
         await updateDoc(docRef, data);
+        return firestoreId; // Return existing ID
       } else {
-        await addDoc(collection(db, "entries"), entry);
+        const docRef = await addDoc(collection(db, "entries"), entry);
+        return docRef.id; // Return new ID from Firebase
       }
     } catch(e){
       console.error('Save error:', e);
       showNotif("Failed to save to Firebase","error");
+      return null;
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   function showNotif(msg,type="success"){ setNotif({msg,type}); setTimeout(()=>setNotif(null),3500); }
@@ -162,9 +166,11 @@ export default function App(){
     const {vehicleNo,partyName,partyWeight,ourGrossWeight,weighmentPerson}=form;
     if(!vehicleNo||!partyName||!partyWeight||!ourGrossWeight||!weighmentPerson) return showNotif("Please fill all required fields","error");
     const draft={...form,ourEmptyWeight:null,netWeight:null,weightDiff:null,status:"Gross Weighment Done",savedAt:new Date().toISOString()};
-    await saveEntry(draft);
-    showNotif(`Draft saved — ${form.id}`);
-    setForm(f=>({...f,step:2}));
+    const firestoreId = await saveEntry(draft);
+    if(firestoreId){
+      showNotif(`Draft saved — ${form.id}`);
+      setForm(f=>({...f,firestoreId,step:2})); // Save firestoreId in form state!
+    }
   }
 
   function step2Next(){
