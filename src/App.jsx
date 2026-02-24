@@ -176,9 +176,9 @@ export default function App(){
         <button onClick={()=>setFilter("")} style={{padding:"6px 12px",borderRadius:6,border:filter===""?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===""?"#eff6ff":"#fff",color:filter===""?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:50}}>ALL</button>
         {letters.map(l=><button key={l} onClick={()=>setFilter(l)} style={{padding:"6px 12px",borderRadius:6,border:filter===l?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===l?"#eff6ff":"#fff",color:filter===l?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:36}}>{l}</button>)}
       </div>
-      <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"scroll"}}>
+      <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",maxHeight:260}}>
         {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:14}}>No parties starting with "{filter}"</div>}
-        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
+        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark,userSelect:"none"}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
       </div>
       <div style={{fontSize:12,color:"#64748b"}}>{filtered.length} of {opts.length} shown</div>
     </div>;
@@ -202,6 +202,9 @@ export default function App(){
       <style>{`
         input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}
         button:active{transform:scale(.98);}
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
         @media (max-width: 768px) {
           .desktop-text { display: none !important; }
           .mobile-text { display: inline !important; }
