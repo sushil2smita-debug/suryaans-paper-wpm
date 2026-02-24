@@ -17,7 +17,7 @@ const db = getFirestore(app);
 
 const PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","J.B Traders","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
 const QUALITY_CHECKERS = ["Sushil","Amit","Milan","Dhirendar","GS Dubey","Ajay Singh","Surajit"];
-const WEIGHMENT_PERSONS = ["Sushil","Amit","Milan","Surajit"];
+const WEIGHMENT_PERSONS = ["Sushil","Amit","Milan","Security","Surajit"];
 const MATERIAL_GRADES = ["Local Waste paper Cuttings","Local waste paper Box","Sack Kraft (SMK)","DSOCC","NDLKC","Fruit Box","Tabocco Box","OCC 98/2","OCC","DSOCC Wallmart","DSOCC Shoprite","Industrial box","Sack Kraft","Shopping Bag"];
 const MOISTURE_OPT = ["< 10%","10–12%","12–15%","15–18%","> 18%"];
 const CONTAM_OPT = ["Nil","< 1%","1–2%","2–5%","> 5%"];
@@ -234,29 +234,32 @@ export default function App(){
                 </div>
                 <div style={{background:C.card,borderRadius:12,padding:"20px"}}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 Entries</div>
-                  <input type="text" style={{...inp,width:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
-                    <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {filtered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
-                      {filtered.map(e=>(
-                        <tr key={e.id}>
-                          <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11}}>{e.id}</td>
-                          <td style={td}>{fmtDate(e.date)}</td>
-                          <td style={{...td,fontFamily:C.mono,fontWeight:700}}>{e.vehicleNo}</td>
-                          <td style={td}>{e.partyName}</td>
-                          <td style={{...td,textAlign:"right",fontWeight:700}}>{kg(e.netWeight)}</td>
-                          <td style={td}><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
-                          <td style={td}><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
-                          <td style={{...td,whiteSpace:"nowrap"}}>
-                            {e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}
-                            {e.status==="Completed"&&<button style={{...actBtn,marginRight:5}} onClick={()=>{setSelected(e);setPage("view");}}>View</button>}
-                            <button style={{...actBtnRed,marginLeft:5}} onClick={()=>deleteEntry(e)}>🗑 Delete</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>
+                  <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                    <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
+                      <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {filtered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
+                        {filtered.map(e=>(
+                          <tr key={e.id}>
+                            <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
+                            <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
+                            <td style={{...td,fontFamily:C.mono,fontWeight:700,whiteSpace:"nowrap"}}>{e.vehicleNo}</td>
+                            <td style={{...td,minWidth:150}}>{e.partyName}</td>
+                            <td style={{...td,textAlign:"right",fontWeight:700,whiteSpace:"nowrap"}}>{kg(e.netWeight)}</td>
+                            <td style={td}><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600,whiteSpace:"nowrap"}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
+                            <td style={{...td,whiteSpace:"nowrap"}}><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
+                            <td style={{...td,whiteSpace:"nowrap"}}>
+                              {e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}
+                              {e.status==="Completed"&&<button style={{...actBtn,marginRight:5}} onClick={()=>{setSelected(e);setPage("view");}}>View</button>}
+                              <button style={{...actBtnRed,marginLeft:5}} onClick={()=>deleteEntry(e)}>🗑 Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>💡 Swipe left/right to see all columns</div>
                 </div>
               </>
             )}
