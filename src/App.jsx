@@ -165,7 +165,6 @@ export default function App(){
     const setFilter=filterId==="party"?setPartyFilter:()=>{};
     const letters=[...new Set(opts.map(o=>o.charAt(0).toUpperCase()))].sort();
     const filtered = filter ? opts.filter(o=>o.toUpperCase().startsWith(filter)) : opts;
-    const listRef = React.useRef(null);
     
     return <div style={{display:"flex",flexDirection:"column",gap:6,...(full?{gridColumn:"1/-1"}:{}),background:"#f8fafc",padding:"12px",borderRadius:10,border:"1px solid #e2e8f0"}}>
       <label style={{fontSize:12,fontWeight:800,color:C.dark}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
@@ -177,9 +176,9 @@ export default function App(){
         <button onClick={()=>setFilter("")} style={{padding:"6px 12px",borderRadius:6,border:filter===""?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===""?"#eff6ff":"#fff",color:filter===""?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:50}}>ALL</button>
         {letters.map(l=><button key={l} onClick={()=>setFilter(l)} style={{padding:"6px 12px",borderRadius:6,border:filter===l?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===l?"#eff6ff":"#fff",color:filter===l?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:36}}>{l}</button>)}
       </div>
-      <div ref={listRef} style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",maxHeight:260,position:"relative",touchAction:"pan-y",overscrollBehavior:"contain"}}>
+      <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"scroll"}}>
         {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:14}}>No parties starting with "{filter}"</div>}
-        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark,userSelect:"none"}} onTouchStart={(e)=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();onChange(o);}}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
+        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
       </div>
       <div style={{fontSize:12,color:"#64748b"}}>{filtered.length} of {opts.length} shown</div>
     </div>;
@@ -200,47 +199,21 @@ export default function App(){
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.dark}}>
-      <style>{`
-        input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}
-        button:active{transform:scale(.98);}
-        * {
-          -webkit-tap-highlight-color: transparent;
-        }
-        body {
-          overscroll-behavior: contain;
-        }
-        @media (max-width: 768px) {
-          .desktop-text { display: none !important; }
-          .mobile-text { display: inline !important; }
-        }
-        @media (min-width: 769px) {
-          .desktop-text { display: inline !important; }
-          .mobile-text { display: none !important; }
-        }
-      `}</style>
+      <style>{`input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}button:active{transform:scale(.98);}`}</style>
       {notif&&<div style={{position:"fixed",top:72,right:20,background:notif.type==="success"?"#0f172a":"#dc2626",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:999,maxWidth:320}}>{notif.type==="success"?"✓ ":"⚠ "}{notif.msg}</div>}
       {saving&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1e40af",color:"#fff",textAlign:"center",padding:"8px",fontSize:12,fontWeight:600}}>🔥 Syncing to Firebase...</div>}
 
-      <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px",position:"sticky",top:0,zIndex:200}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",position:"sticky",top:0,zIndex:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#dc2626,#991b1b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>♻</div>
           <div>
-            <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>
-              <span style={{display:"inline"}} className="desktop-text">{COMPANY.name} — RAWMATERIAL INWARD</span>
-              <span style={{display:"none"}} className="mobile-text">{COMPANY.name}</span>
-            </div>
-            <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>
-              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries</span>
-              <span style={{display:"none"}} className="mobile-text">{entries.length} Entries</span>
-            </div>
+            <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>{COMPANY.name} — RAWMATERIAL INWARD</div>
+            <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>Firebase Live Sync • {entries.length} Entries</div>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>
-            <span className="desktop-text">📊 Dashboard</span>
-            <span style={{display:"none"}} className="mobile-text">📊</span>
-          </button>
-          <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}} className="desktop-text">{tick}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>📊 Dashboard</button>
+          <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}}>{tick}</div>
           <button style={newBtn} onClick={startNew}>+ New</button>
         </div>
       </header>
