@@ -36,12 +36,53 @@ const COMPANY = {
   creator: "SUSHIL",
 };
 
+// FIX #9 — C style object moved outside App so it's not recreated every render
+const C = {
+  bg:"#f1f5f9", card:"#fff", dark:"#0f172a", mid:"#334155", muted:"#64748b",
+  border:"#e2e8f0", font:"'IBM Plex Sans','Segoe UI',system-ui,sans-serif",
+  mono:"'IBM Plex Mono','Courier New',monospace"
+};
+
 function nowDate(){ return new Date().toISOString().split("T")[0]; }
 function nowTime(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true}); }
 function nowFull(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}); }
-function genId(n){ return `WP-${new Date().getFullYear()}-${String(n).padStart(4,"0")}`; }
 function kg(n){ return n!=null&&n!==undefined ? Number(n).toLocaleString("en-IN") : "—"; }
 function fmtDate(d){ if(!d) return "—"; const p=d.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }
+
+// FIX #1 & #7 — ChipGroup moved outside App component
+function ChipGroup({label,opts,val,onChange}){
+  return <div style={{display:"flex",flexDirection:"column",gap:5,gridColumn:"1/-1"}}>
+    <label style={{fontSize:11,fontWeight:700,color:C.mid}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+      {opts.map(o=><div key={o} onClick={()=>onChange(o)} style={{border:`2px solid ${val===o?"#1e40af":C.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",background:val===o?"#eff6ff":"#f8fafc",fontSize:12,fontWeight:val===o?700:400,color:val===o?"#1e40af":C.mid,transition:"all .15s",minWidth:80}}>{o}</div>)}
+    </div>
+  </div>;
+}
+
+// FIX #1 & #2 — FSel moved outside App; filter state is now local (self-contained)
+// FIX #8 — generic empty message instead of hardcoded "parties"
+function FSel({label,val,onChange,opts,full}){
+  const [filter, setFilter] = useState("");
+  const letters=[...new Set(opts.map(o=>o.charAt(0).toUpperCase()))].sort();
+  const filtered = filter ? opts.filter(o=>o.toUpperCase().startsWith(filter.toUpperCase())) : opts;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:6,...(full?{gridColumn:"1/-1"}:{}),background:"#f8fafc",padding:"12px",borderRadius:10,border:"1px solid #e2e8f0"}}>
+    <label style={{fontSize:12,fontWeight:800,color:C.dark}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
+    <div style={{background:val?"#10b981":"#fff",border:`2px solid ${val?"#059669":"#e2e8f0"}`,borderRadius:8,padding:"12px 14px",minHeight:48,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <span style={{fontSize:14,fontWeight:val?700:400,color:val?"#fff":"#94a3b8"}}>{val?`✓ ${val}`:"Click letter, then select"}</span>
+      {val&&<button onClick={()=>{onChange("");setFilter("");}} style={{background:"#fff",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>✕</button>}
+    </div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"8px 0",borderBottom:"1px solid #e2e8f0"}}>
+      <button onClick={()=>setFilter("")} style={{padding:"6px 12px",borderRadius:6,border:filter===""?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===""?"#eff6ff":"#fff",color:filter===""?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:50}}>ALL</button>
+      {letters.map(l=><button key={l} onClick={()=>setFilter(l)} style={{padding:"6px 12px",borderRadius:6,border:filter===l?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===l?"#eff6ff":"#fff",color:filter===l?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:36}}>{l}</button>)}
+    </div>
+    <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"scroll"}}>
+      {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:14}}>No options starting with "{filter}"</div>}
+      {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
+    </div>
+    <div style={{fontSize:12,color:"#64748b"}}>{filtered.length} of {opts.length} shown</div>
+  </div>;
+}
 
 export default function App(){
   const [entries, setEntries] = useState([]);
@@ -53,7 +94,7 @@ export default function App(){
   const [notif, setNotif] = useState(null);
   const [tick, setTick] = useState(nowFull());
   const [filterP, setFilterP] = useState("");
-  const [partyFilter, setPartyFilter] = useState("");
+  // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
 
@@ -75,8 +116,9 @@ export default function App(){
     setSaving(true);
     try{
       if(entry.firestoreId){
-        const docRef = doc(db, "entries", entry.firestoreId);
-        await updateDoc(docRef, entry);
+        const {firestoreId, ...data} = entry;
+        const docRef = doc(db, "entries", firestoreId);
+        await updateDoc(docRef, data);
       } else {
         await addDoc(collection(db, "entries"), entry);
       }
@@ -102,8 +144,17 @@ export default function App(){
     setSaving(false);
   }
 
+  // FIX #5 — genId now uses timestamp to avoid duplicate IDs after deletion
+  function genId(){
+    const year = new Date().getFullYear();
+    const n = entries.length > 0
+      ? Math.max(...entries.map(e => parseInt(e.id?.split("-")[2]||0))) + 1
+      : 1;
+    return `WP-${year}-${String(n).padStart(4,"0")}`;
+  }
+
   function startNew(){
-    setForm({ step:1, id:genId(entries.length+1), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
+    setForm({ step:1, id:genId(), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
     setPage("form");
   }
 
@@ -128,8 +179,7 @@ export default function App(){
     if(empty>=gross) return showNotif("Empty weight cannot be ≥ Gross weight","error");
     const net=gross-empty,diff=parseFloat(form.partyWeight)-net;
     const entry={...form,emptyTime:nowTime(),ourEmptyWeight:empty,ourGrossWeight:gross,partyWeight:parseFloat(form.partyWeight),netWeight:net,weightDiff:diff,status:"Completed",savedAt:new Date().toISOString()};
-    const existing = entries.find(e => e.id === entry.id);
-    if(existing) entry.firestoreId = existing.firestoreId;
+    // FIX #6 — use form.firestoreId directly (set when draft was saved) instead of searching entries
     await saveEntry(entry);
     showNotif(`✓ Entry ${form.id} completed!`);
     setPage("dashboard");
@@ -140,49 +190,16 @@ export default function App(){
     setPage("form");
   }
 
-  const filtered=entries.filter(e=>filterP?e.partyName.toLowerCase().includes(filterP.toLowerCase()):true);
+  // FIX #4 — renamed to dashFiltered to avoid collision with FSel's internal filtered variable
+  const dashFiltered=entries.filter(e=>filterP?e.partyName.toLowerCase().includes(filterP.toLowerCase()):true);
   const today=nowDate();
   const todayEnt=entries.filter(e=>e.date===today);
   const pendingCount=entries.filter(e=>e.status!=="Completed").length;
   const totalNetMT=entries.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
   const todayNetMT=todayEnt.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
 
-  const C={bg:"#f1f5f9",card:"#fff",dark:"#0f172a",mid:"#334155",muted:"#64748b",border:"#e2e8f0",font:"'IBM Plex Sans','Segoe UI',system-ui,sans-serif",mono:"'IBM Plex Mono','Courier New',monospace"};
   const badge=(st)=>{ const m=STATUS_META[st]||STATUS_META["Completed"]; return{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:20,fontSize:10.5,fontWeight:700,background:m.bg,color:m.text,border:`1px solid ${m.border}`}; };
   const bDot=(st)=>({width:6,height:6,borderRadius:"50%",background:(STATUS_META[st]||STATUS_META["Completed"]).dot});
-
-  function ChipGroup({label,opts,val,onChange}){
-    return <div style={{display:"flex",flexDirection:"column",gap:5,gridColumn:"1/-1"}}>
-      <label style={{fontSize:11,fontWeight:700,color:C.mid}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
-        {opts.map(o=><div key={o} onClick={()=>onChange(o)} style={{border:`2px solid ${val===o?"#1e40af":C.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",background:val===o?"#eff6ff":"#f8fafc",fontSize:12,fontWeight:val===o?700:400,color:val===o?"#1e40af":C.mid,transition:"all .15s",minWidth:80}}>{o}</div>)}
-      </div>
-    </div>;
-  }
-
-  function FSel({label,val,onChange,opts,full,filterId}){
-    const filter=filterId==="party"?partyFilter:"";
-    const setFilter=filterId==="party"?setPartyFilter:()=>{};
-    const letters=[...new Set(opts.map(o=>o.charAt(0).toUpperCase()))].sort();
-    const filtered = filter ? opts.filter(o=>o.toUpperCase().startsWith(filter)) : opts;
-    
-    return <div style={{display:"flex",flexDirection:"column",gap:6,...(full?{gridColumn:"1/-1"}:{}),background:"#f8fafc",padding:"12px",borderRadius:10,border:"1px solid #e2e8f0"}}>
-      <label style={{fontSize:12,fontWeight:800,color:C.dark}}>{label}<span style={{color:"#dc2626"}}>*</span></label>
-      <div style={{background:val?"#10b981":"#fff",border:`2px solid ${val?"#059669":"#e2e8f0"}`,borderRadius:8,padding:"12px 14px",minHeight:48,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <span style={{fontSize:14,fontWeight:val?700:400,color:val?"#fff":"#94a3b8"}}>{val?`✓ ${val}`:"Click letter, then select"}</span>
-        {val&&<button onClick={()=>{onChange("");setFilter("");}} style={{background:"#fff",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>✕</button>}
-      </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"8px 0",borderBottom:"1px solid #e2e8f0"}}>
-        <button onClick={()=>setFilter("")} style={{padding:"6px 12px",borderRadius:6,border:filter===""?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===""?"#eff6ff":"#fff",color:filter===""?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:50}}>ALL</button>
-        {letters.map(l=><button key={l} onClick={()=>setFilter(l)} style={{padding:"6px 12px",borderRadius:6,border:filter===l?"2px solid #1e40af":"1px solid #cbd5e1",background:filter===l?"#eff6ff":"#fff",color:filter===l?"#1e40af":"#64748b",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:36}}>{l}</button>)}
-      </div>
-      <div style={{border:"2px solid #cbd5e1",borderRadius:8,background:"#fff",height:260,overflowY:"scroll"}}>
-        {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:14}}>No parties starting with "{filter}"</div>}
-        {filtered.map((o,i)=><div key={o} style={{padding:"13px 16px",cursor:"pointer",fontSize:14,borderBottom:i===filtered.length-1?"none":"1px solid #f1f5f9",background:val===o?"#d1fae5":"#fff",fontWeight:val===o?700:500,color:val===o?"#065f46":C.dark}} onClick={()=>onChange(o)}>{val===o&&<span style={{color:"#10b981",marginRight:8}}>✓</span>}{o}</div>)}
-      </div>
-      <div style={{fontSize:12,color:"#64748b"}}>{filtered.length} of {opts.length} shown</div>
-    </div>;
-  }
 
   const inp = {border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none",background:"#f8fafc",color:C.dark,width:"100%",boxSizing:"border-box"};
   const roInp = {...inp,background:"#eef2f7",color:C.muted};
@@ -199,21 +216,41 @@ export default function App(){
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:C.font,color:C.dark}}>
-      <style>{`input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}button:active{transform:scale(.98);}`}</style>
+      <style>{`
+        input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}
+        button:active{transform:scale(.98);}
+        @media (max-width: 768px) {
+          .desktop-text { display: none !important; }
+          .mobile-text { display: inline !important; }
+        }
+        @media (min-width: 769px) {
+          .desktop-text { display: inline !important; }
+          .mobile-text { display: none !important; }
+        }
+      `}</style>
       {notif&&<div style={{position:"fixed",top:72,right:20,background:notif.type==="success"?"#0f172a":"#dc2626",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:999,maxWidth:320}}>{notif.type==="success"?"✓ ":"⚠ "}{notif.msg}</div>}
       {saving&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1e40af",color:"#fff",textAlign:"center",padding:"8px",fontSize:12,fontWeight:600}}>🔥 Syncing to Firebase...</div>}
 
-      <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",position:"sticky",top:0,zIndex:200}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px",position:"sticky",top:0,zIndex:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#dc2626,#991b1b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>♻</div>
           <div>
-            <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>{COMPANY.name} — RAWMATERIAL INWARD</div>
-            <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>Firebase Live Sync • {entries.length} Entries</div>
+            <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>
+              <span style={{display:"inline"}} className="desktop-text">{COMPANY.name} — RAWMATERIAL INWARD</span>
+              <span style={{display:"none"}} className="mobile-text">{COMPANY.name}</span>
+            </div>
+            <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>
+              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries</span>
+              <span style={{display:"none"}} className="mobile-text">{entries.length} Entries</span>
+            </div>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>📊 Dashboard</button>
-          <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}}>{tick}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>
+            <span className="desktop-text">📊 Dashboard</span>
+            <span style={{display:"none"}} className="mobile-text">📊</span>
+          </button>
+          <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}} className="desktop-text">{tick}</div>
           <button style={newBtn} onClick={startNew}>+ New</button>
         </div>
       </header>
@@ -239,8 +276,8 @@ export default function App(){
                     <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
                       <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {filtered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
-                        {filtered.map(e=>(
+                        {dashFiltered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
+                        {dashFiltered.map(e=>(
                           <tr key={e.id}>
                             <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
                             <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
@@ -292,7 +329,8 @@ export default function App(){
                     <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Vehicle Number*</label>
                     <input style={{...inp,textTransform:"uppercase",fontWeight:700}} value={form.vehicleNo} onChange={e=>setForm(f=>({...f,vehicleNo:e.target.value.toUpperCase()}))}/>
                   </div>
-                  <FSel label="Party Name" val={form.partyName} onChange={v=>setForm(f=>({...f,partyName:v}))} opts={PARTIES} filterId="party"/>
+                  {/* FIX #2 — filterId prop removed; FSel handles its own filter state */}
+                  <FSel label="Party Name" val={form.partyName} onChange={v=>setForm(f=>({...f,partyName:v}))} opts={PARTIES}/>
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     <label style={{fontSize:11,fontWeight:700,color:C.mid}}>Party Weight (kg)*</label>
                     <input style={inp} type="number" value={form.partyWeight} onChange={e=>setForm(f=>({...f,partyWeight:e.target.value}))}/>
