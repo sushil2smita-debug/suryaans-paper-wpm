@@ -317,12 +317,13 @@ export default function App(){
             <div style={{fontSize:20,fontWeight:800,marginBottom:18}}>{COMPANY.name} — Daily Register</div>
             {loading?<div style={{textAlign:"center",padding:48,color:C.muted}}>⟳ Loading from Firebase...</div>:(
               <>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:22}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:22}}>
                   {[
-                    {l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626",sub:""},
-                    {l:"This Month Net (MT)",v:thisMonthNetMT.toFixed(2),c:"#f59e0b",sub:formatMonth(currentMonth)},
-                    {l:"Pending Entries",v:pendingCount,c:"#2563eb",sub:""},
-                    {l:"All Time Total (MT)",v:totalNetMT.toFixed(2),c:"#16a34a",sub:"Since start"}
+                    {l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626",sub:"Entries today"},
+                    {l:"Today Net (MT)",v:todayNetMT.toFixed(2),c:"#f59e0b",sub:"Today's total"},
+                    {l:"This Month (MT)",v:thisMonthNetMT.toFixed(2),c:"#2563eb",sub:formatMonth(currentMonth)},
+                    {l:"Pending",v:pendingCount,c:"#9333ea",sub:"Incomplete"},
+                    {l:"All Time (MT)",v:totalNetMT.toFixed(2),c:"#16a34a",sub:"Since start"}
                   ].map(s=>(
                     <div key={s.l} style={{background:C.card,borderRadius:12,padding:"18px 20px",borderTop:`3px solid ${s.c}`}}>
                       <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
