@@ -94,6 +94,11 @@ export default function App(){
   const [notif, setNotif] = useState(null);
   const [tick, setTick] = useState(nowFull());
   const [filterP, setFilterP] = useState("");
+  
+  // NEW: Advanced filter states
+  const [filterParty, setFilterParty] = useState("All");
+  const [filterDate, setFilterDate] = useState("");
+  const [filterMonth, setFilterMonth] = useState("current");
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -197,12 +202,57 @@ export default function App(){
   }
 
   // FIX #4 — renamed to dashFiltered to avoid collision with FSel's internal filtered variable
-  const dashFiltered=entries.filter(e=>filterP?e.partyName.toLowerCase().includes(filterP.toLowerCase()):true);
-  const today=nowDate();
-  const todayEnt=entries.filter(e=>e.date===today);
-  const pendingCount=entries.filter(e=>e.status!=="Completed").length;
-  const totalNetMT=entries.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
-  const todayNetMT=todayEnt.filter(e=>e.netWeight).reduce((s,e)=>s+e.netWeight,0)/1000;
+  // NEW: Advanced filtering logic
+  let filtered = entries;
+  
+  // Apply party filter
+  if(filterParty !== "All") {
+    filtered = filtered.filter(e => e.partyName === filterParty);
+  }
+  
+  // Apply date filter
+  if(filterDate) {
+    filtered = filtered.filter(e => e.date === filterDate);
+  }
+  
+  // Apply month filter
+  if(filterMonth !== "all") {
+    if(filterMonth === "current") {
+      const currentMonth = nowDate().slice(0, 7); // "2026-02"
+      filtered = filtered.filter(e => e.date && e.date.startsWith(currentMonth));
+    } else {
+      filtered = filtered.filter(e => e.date && e.date.startsWith(filterMonth));
+    }
+  }
+  
+  // Apply search text filter (existing)
+  const dashFiltered = filtered.filter(e => filterP ? e.partyName.toLowerCase().includes(filterP.toLowerCase()) : true);
+  
+  // Calculate statistics
+  const today = nowDate();
+  const currentMonth = today.slice(0, 7); // "2026-02"
+  
+  const todayEnt = entries.filter(e => e.date === today);
+  const thisMonthEnt = entries.filter(e => e.date && e.date.startsWith(currentMonth) && e.status === "Completed");
+  const pendingCount = entries.filter(e => e.status !== "Completed").length;
+  
+  const totalNetMT = entries.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
+  const todayNetMT = todayEnt.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
+  const thisMonthNetMT = thisMonthEnt.reduce((s, e) => s + (e.netWeight || 0), 0) / 1000;
+  
+  // Filtered summary statistics
+  const filteredNetMT = dashFiltered.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
+  
+  // Get available months from entries
+  const availableMonths = [...new Set(entries.map(e => e.date ? e.date.slice(0, 7) : null).filter(Boolean))].sort().reverse();
+  
+  // Format month for display
+  const formatMonth = (monthStr) => {
+    if(!monthStr) return "";
+    const [year, month] = monthStr.split("-");
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${monthNames[parseInt(month)-1]} ${year}`;
+  };
 
   const badge=(st)=>{ const m=STATUS_META[st]||STATUS_META["Completed"]; return{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:20,fontSize:10.5,fontWeight:700,background:m.bg,color:m.text,border:`1px solid ${m.border}`}; };
   const bDot=(st)=>({width:6,height:6,borderRadius:"50%",background:(STATUS_META[st]||STATUS_META["Completed"]).dot});
@@ -268,13 +318,61 @@ export default function App(){
             {loading?<div style={{textAlign:"center",padding:48,color:C.muted}}>⟳ Loading from Firebase...</div>:(
               <>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:22}}>
-                  {[{l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626"},{l:"Pending",v:pendingCount,c:"#f59e0b"},{l:"Today Net (MT)",v:todayNetMT.toFixed(2),c:"#2563eb"},{l:"Total Net (MT)",v:totalNetMT.toFixed(2),c:"#16a34a"}].map(s=>(
+                  {[
+                    {l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626",sub:""},
+                    {l:"This Month Net (MT)",v:thisMonthNetMT.toFixed(2),c:"#f59e0b",sub:formatMonth(currentMonth)},
+                    {l:"Pending Entries",v:pendingCount,c:"#2563eb",sub:""},
+                    {l:"All Time Total (MT)",v:totalNetMT.toFixed(2),c:"#16a34a",sub:"Since start"}
+                  ].map(s=>(
                     <div key={s.l} style={{background:C.card,borderRadius:12,padding:"18px 20px",borderTop:`3px solid ${s.c}`}}>
                       <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
                       <div style={{fontSize:26,fontWeight:800}}>{s.v}</div>
+                      {s.sub&&<div style={{fontSize:9,color:C.muted,marginTop:4}}>{s.sub}</div>}
                     </div>
                   ))}
                 </div>
+                <div style={{background:C.card,borderRadius:12,padding:"20px",marginBottom:14}}>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🔍 Filters</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:12}}>
+                    <div>
+                      <label style={{fontSize:11,fontWeight:700,color:C.mid,marginBottom:4,display:"block"}}>Party</label>
+                      <select value={filterParty} onChange={e=>setFilterParty(e.target.value)} style={{...inp,cursor:"pointer"}}>
+                        <option value="All">All Parties</option>
+                        {PARTIES.map(p=><option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:11,fontWeight:700,color:C.mid,marginBottom:4,display:"block"}}>Date</label>
+                      <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={{fontSize:11,fontWeight:700,color:C.mid,marginBottom:4,display:"block"}}>Month</label>
+                      <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{...inp,cursor:"pointer"}}>
+                        <option value="current">This Month ({formatMonth(currentMonth)})</option>
+                        <option value="all">All Time</option>
+                        {availableMonths.filter(m=>m!==currentMonth).map(m=><option key={m} value={m}>{formatMonth(m)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>{setFilterParty("All");setFilterDate("");setFilterMonth("current");setFilterP("");}} style={secondaryBtn}>Clear Filters</button>
+                  </div>
+                </div>
+                {(filterParty!=="All"||filterDate||filterMonth!=="current"||filterP)&&(
+                  <div style={{background:"#eff6ff",border:"2px solid #93c5fd",borderRadius:12,padding:"16px",marginBottom:14}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#1e40af",marginBottom:8}}>📊 Filtered Results</div>
+                    <div style={{fontSize:12,color:"#1e40af"}}>
+                      {filterParty!=="All"&&<div>• Party: <strong>{filterParty}</strong></div>}
+                      {filterDate&&<div>• Date: <strong>{fmtDate(filterDate)}</strong></div>}
+                      {filterMonth!=="current"&&filterMonth!=="all"&&<div>• Month: <strong>{formatMonth(filterMonth)}</strong></div>}
+                      {filterP&&<div>• Search: <strong>{filterP}</strong></div>}
+                      <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #93c5fd"}}>
+                        Total Entries: <strong>{dashFiltered.length}</strong> • 
+                        Total Weight: <strong>{filteredNetMT.toFixed(2)} MT</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div style={{background:C.card,borderRadius:12,padding:"20px"}}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 Entries</div>
                   <input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>
