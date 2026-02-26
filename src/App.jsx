@@ -211,12 +211,9 @@ export default function App(){
   // NEW: Advanced filtering logic
   let filtered = entries;
   
-  // Apply party filter
+  // Apply party filter — use trimmed, case-insensitive comparison to handle Firebase whitespace differences
   if(filterParty !== "All") {
-    console.log("Filtering by party:", filterParty);
-    console.log("Before filter:", filtered.length, "entries");
-    filtered = filtered.filter(e => e.partyName === filterParty);
-    console.log("After filter:", filtered.length, "entries");
+    filtered = filtered.filter(e => e.partyName && e.partyName.trim().toLowerCase() === filterParty.trim().toLowerCase());
   }
   
   // Apply date filter
@@ -234,10 +231,10 @@ export default function App(){
     }
   }
   
-  // Apply search text filter (existing)
-  const dashFiltered = filtered.filter(e => filterP ? e.partyName.toLowerCase().includes(filterP.toLowerCase()) : true);
-  console.log("Final dashFiltered:", dashFiltered.length, "entries");
-  console.log("Party names:", dashFiltered.map(e => e.partyName));
+  // Apply search text filter (only when no specific party is selected)
+  const dashFiltered = (filterParty === "All" && filterP)
+    ? filtered.filter(e => e.partyName && e.partyName.toLowerCase().includes(filterP.toLowerCase()))
+    : filtered;
   
   // Calculate statistics
   const today = nowDate();
