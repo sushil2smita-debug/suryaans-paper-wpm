@@ -392,7 +392,7 @@ export default function App(){
                       <tbody>
                         {dashFiltered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
                         {dashFiltered.map(e=>(
-                          <tr key={e.id}>
+                          <tr key={e.firestoreId||e.id}>
                             <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
                             <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
                             <td style={{...td,fontFamily:C.mono,fontWeight:700,whiteSpace:"nowrap"}}>{e.vehicleNo}</td>
