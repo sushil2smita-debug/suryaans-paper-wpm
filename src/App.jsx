@@ -213,7 +213,10 @@ export default function App(){
   
   // Apply party filter
   if(filterParty !== "All") {
+    console.log("Filtering by party:", filterParty);
+    console.log("Before filter:", filtered.length, "entries");
     filtered = filtered.filter(e => e.partyName === filterParty);
+    console.log("After filter:", filtered.length, "entries");
   }
   
   // Apply date filter
@@ -233,6 +236,8 @@ export default function App(){
   
   // Apply search text filter (existing)
   const dashFiltered = filtered.filter(e => filterP ? e.partyName.toLowerCase().includes(filterP.toLowerCase()) : true);
+  console.log("Final dashFiltered:", dashFiltered.length, "entries");
+  console.log("Party names:", dashFiltered.map(e => e.partyName));
   
   // Calculate statistics
   const today = nowDate();
