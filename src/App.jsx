@@ -43,9 +43,15 @@ const C = {
   mono:"'IBM Plex Mono','Courier New',monospace"
 };
 
-function nowDate(){ return new Date().toISOString().split("T")[0]; }
-function nowTime(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true}); }
-function nowFull(){ return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}); }
+function nowDate(){ 
+  return new Date().toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"}); // YYYY-MM-DD format in IST
+}
+function nowTime(){ 
+  return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"}); 
+}
+function nowFull(){ 
+  return new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true,timeZone:"Asia/Kolkata"}); 
+}
 function kg(n){ return n!=null&&n!==undefined ? Number(n).toLocaleString("en-IN") : "—"; }
 function fmtDate(d){ if(!d) return "—"; const p=d.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }
 
@@ -337,7 +343,7 @@ export default function App(){
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:12}}>
                     <div>
                       <label style={{fontSize:11,fontWeight:700,color:C.mid,marginBottom:4,display:"block"}}>Party</label>
-                      <select value={filterParty} onChange={e=>setFilterParty(e.target.value)} style={{...inp,cursor:"pointer"}}>
+                      <select value={filterParty} onChange={e=>{setFilterParty(e.target.value);setFilterP("");}} style={{...inp,cursor:"pointer"}}>
                         <option value="All">All Parties</option>
                         {PARTIES.map(p=><option key={p} value={p}>{p}</option>)}
                       </select>
@@ -376,7 +382,8 @@ export default function App(){
                 )}
                 <div style={{background:C.card,borderRadius:12,padding:"20px"}}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 Entries</div>
-                  <input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>
+                  {filterParty==="All"&&<input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>}
+                  {filterParty!=="All"&&<div style={{fontSize:12,color:C.muted,marginBottom:14,fontStyle:"italic"}}>Showing entries for: <strong>{filterParty}</strong></div>}
                   <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
                     <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
                       <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
