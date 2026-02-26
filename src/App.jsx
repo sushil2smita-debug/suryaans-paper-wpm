@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc } from "firebase/firestore";
 
@@ -207,34 +207,35 @@ export default function App(){
     setPage("form");
   }
 
-  // FIX #4 — renamed to dashFiltered to avoid collision with FSel's internal filtered variable
-  // NEW: Advanced filtering logic
-  let filtered = entries;
-  
-  // Apply party filter — use trimmed, case-insensitive comparison to handle Firebase whitespace differences
-  if(filterParty !== "All") {
-    filtered = filtered.filter(e => e.partyName && e.partyName.trim().toLowerCase() === filterParty.trim().toLowerCase());
-  }
-  
-  // Apply date filter
-  if(filterDate) {
-    filtered = filtered.filter(e => e.date === filterDate);
-  }
-  
-  // Apply month filter
-  if(filterMonth !== "all") {
-    if(filterMonth === "current") {
-      const currentMonth = nowDate().slice(0, 7); // "2026-02"
-      filtered = filtered.filter(e => e.date && e.date.startsWith(currentMonth));
-    } else {
-      filtered = filtered.filter(e => e.date && e.date.startsWith(filterMonth));
+  // Filtering with useMemo to guarantee recalculation on every state change
+  const dashFiltered = useMemo(() => {
+    let result = [...entries];
+    
+    // Party filter
+    if(filterParty && filterParty !== "All") {
+      const target = filterParty.trim().toLowerCase();
+      result = result.filter(e => e.partyName && e.partyName.trim().toLowerCase() === target);
     }
-  }
-  
-  // Apply search text filter (only when no specific party is selected)
-  const dashFiltered = (filterParty === "All" && filterP)
-    ? filtered.filter(e => e.partyName && e.partyName.toLowerCase().includes(filterP.toLowerCase()))
-    : filtered;
+    
+    // Date filter
+    if(filterDate) {
+      result = result.filter(e => e.date === filterDate);
+    }
+    
+    // Month filter
+    if(filterMonth !== "all") {
+      const monthKey = filterMonth === "current" ? nowDate().slice(0, 7) : filterMonth;
+      result = result.filter(e => e.date && e.date.startsWith(monthKey));
+    }
+    
+    // Text search (only when no specific party selected)
+    if(filterParty === "All" && filterP) {
+      const search = filterP.toLowerCase();
+      result = result.filter(e => e.partyName && e.partyName.toLowerCase().includes(search));
+    }
+    
+    return result;
+  }, [entries, filterParty, filterDate, filterMonth, filterP]);
   
   // Calculate statistics
   const today = nowDate();
