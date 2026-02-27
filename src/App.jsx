@@ -241,6 +241,21 @@ export default function App(){
   const today = nowDate();
   const currentMonth = today.slice(0, 7); // "2026-02"
   
+  // Financial Year calculation (April 1st to March 31st)
+  const getCurrentFY = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // 1-12
+    
+    // If Jan-Mar, FY started last year (e.g., Feb 2026 → FY 2025-26)
+    // If Apr-Dec, FY started this year (e.g., May 2026 → FY 2026-27)
+    const fyStartYear = month >= 4 ? year : year - 1;
+    return `${fyStartYear}-04-01`; // FY start date: 2025-04-01
+  };
+  
+  const fyStartDate = getCurrentFY();
+  const fyEntries = entries.filter(e => e.date && e.date >= fyStartDate && e.status === "Completed");
+  
   const todayEnt = entries.filter(e => e.date === today);
   const thisMonthEnt = entries.filter(e => e.date && e.date.startsWith(currentMonth) && e.status === "Completed");
   const pendingCount = entries.filter(e => e.status !== "Completed").length;
@@ -248,6 +263,17 @@ export default function App(){
   const totalNetMT = entries.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
   const todayNetMT = todayEnt.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
   const thisMonthNetMT = thisMonthEnt.reduce((s, e) => s + (e.netWeight || 0), 0) / 1000;
+  const thisYearNetMT = fyEntries.reduce((s, e) => s + (e.netWeight || 0), 0) / 1000;
+  
+  // Format FY for display (e.g., "FY 2025-26")
+  const formatFY = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const fyStartYear = month >= 4 ? year : year - 1;
+    const fyEndYear = fyStartYear + 1;
+    return `FY ${fyStartYear}-${fyEndYear.toString().slice(2)}`;
+  };
   
   // Filtered summary statistics
   const filteredNetMT = dashFiltered.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
@@ -331,6 +357,7 @@ export default function App(){
                     {l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626",sub:"Entries today"},
                     {l:"Today Net (MT)",v:todayNetMT.toFixed(2),c:"#f59e0b",sub:"Today's total"},
                     {l:"This Month (MT)",v:thisMonthNetMT.toFixed(2),c:"#2563eb",sub:formatMonth(currentMonth)},
+                    {l:"This Year (MT)",v:thisYearNetMT.toFixed(2),c:"#8b5cf6",sub:formatFY()},
                     {l:"Pending",v:pendingCount,c:"#9333ea",sub:"Incomplete"},
                     {l:"All Time (MT)",v:totalNetMT.toFixed(2),c:"#16a34a",sub:"Since start"}
                   ].map(s=>(
