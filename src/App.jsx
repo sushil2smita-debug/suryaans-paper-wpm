@@ -105,6 +105,10 @@ export default function App(){
   const [filterParty, setFilterParty] = useState("All");
   const [filterDate, setFilterDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("current");
+  
+  // NEW: Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(50); // Show 50 entries per page
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -237,24 +241,21 @@ export default function App(){
     return result;
   }, [entries, filterParty, filterDate, filterMonth, filterP]);
   
+  // NEW: Pagination calculations
+  const totalEntries = dashFiltered.length;
+  const totalPages = Math.ceil(totalEntries / entriesPerPage);
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const endIndex = startIndex + entriesPerPage;
+  const currentEntries = dashFiltered.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterParty, filterDate, filterMonth, filterP]);
+  
   // Calculate statistics
   const today = nowDate();
   const currentMonth = today.slice(0, 7); // "2026-02"
-  
-  // Financial Year calculation (April 1st to March 31st)
-  const getCurrentFY = () => {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1; // 1-12
-    
-    // If Jan-Mar, FY started last year (e.g., Feb 2026 → FY 2025-26)
-    // If Apr-Dec, FY started this year (e.g., May 2026 → FY 2026-27)
-    const fyStartYear = month >= 4 ? year : year - 1;
-    return `${fyStartYear}-04-01`; // FY start date: 2025-04-01
-  };
-  
-  const fyStartDate = getCurrentFY();
-  const fyEntries = entries.filter(e => e.date && e.date >= fyStartDate && e.status === "Completed");
   
   const todayEnt = entries.filter(e => e.date === today);
   const thisMonthEnt = entries.filter(e => e.date && e.date.startsWith(currentMonth) && e.status === "Completed");
@@ -263,17 +264,6 @@ export default function App(){
   const totalNetMT = entries.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
   const todayNetMT = todayEnt.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
   const thisMonthNetMT = thisMonthEnt.reduce((s, e) => s + (e.netWeight || 0), 0) / 1000;
-  const thisYearNetMT = fyEntries.reduce((s, e) => s + (e.netWeight || 0), 0) / 1000;
-  
-  // Format FY for display (e.g., "FY 2025-26")
-  const formatFY = () => {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const fyStartYear = month >= 4 ? year : year - 1;
-    const fyEndYear = fyStartYear + 1;
-    return `FY ${fyStartYear}-${fyEndYear.toString().slice(2)}`;
-  };
   
   // Filtered summary statistics
   const filteredNetMT = dashFiltered.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
@@ -357,7 +347,6 @@ export default function App(){
                     {l:"Today's Vehicles",v:todayEnt.length,c:"#dc2626",sub:"Entries today"},
                     {l:"Today Net (MT)",v:todayNetMT.toFixed(2),c:"#f59e0b",sub:"Today's total"},
                     {l:"This Month (MT)",v:thisMonthNetMT.toFixed(2),c:"#2563eb",sub:formatMonth(currentMonth)},
-                    {l:"This Year (MT)",v:thisYearNetMT.toFixed(2),c:"#8b5cf6",sub:formatFY()},
                     {l:"Pending",v:pendingCount,c:"#9333ea",sub:"Incomplete"},
                     {l:"All Time (MT)",v:totalNetMT.toFixed(2),c:"#16a34a",sub:"Since start"}
                   ].map(s=>(
@@ -418,8 +407,8 @@ export default function App(){
                     <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
                       <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {dashFiltered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
-                        {dashFiltered.map(e=>(
+                        {currentEntries.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
+                        {currentEntries.map(e=>(
                           <tr key={e.firestoreId||e.id}>
                             <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
                             <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
@@ -439,6 +428,78 @@ export default function App(){
                     </table>
                   </div>
                   <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>💡 Swipe left/right to see all columns</div>
+                  
+                  {/* NEW: Pagination Controls */}
+                  {totalEntries > 0 && (
+                    <div style={{marginTop:20,paddingTop:20,borderTop:`2px solid ${C.border}`}}>
+                      {/* Status: Showing X-Y of Z entries */}
+                      <div style={{fontSize:13,color:C.mid,marginBottom:12,textAlign:"center"}}>
+                        Showing <strong>{startIndex + 1}-{Math.min(endIndex, totalEntries)}</strong> of <strong>{totalEntries}</strong> entries
+                      </div>
+                      
+                      {/* Pagination buttons */}
+                      <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        {/* Previous button */}
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          style={{
+                            padding:"8px 16px",
+                            borderRadius:8,
+                            border:`1.5px solid ${C.border}`,
+                            background: currentPage === 1 ? "#f1f5f9" : "#fff",
+                            color: currentPage === 1 ? C.muted : C.dark,
+                            cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                            fontSize:13,
+                            fontWeight:600,
+                            opacity: currentPage === 1 ? 0.5 : 1
+                          }}
+                        >
+                          ◀ Previous
+                        </button>
+                        
+                        {/* Page numbers */}
+                        {Array.from({length: totalPages}, (_, i) => i + 1).map(pageNum => (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            style={{
+                              padding:"8px 14px",
+                              borderRadius:8,
+                              border:`1.5px solid ${currentPage === pageNum ? "#0f172a" : C.border}`,
+                              background: currentPage === pageNum ? "#0f172a" : "#fff",
+                              color: currentPage === pageNum ? "#fff" : C.dark,
+                              cursor:"pointer",
+                              fontSize:13,
+                              fontWeight: currentPage === pageNum ? 700 : 600,
+                              minWidth:40
+                            }}
+                          >
+                            {pageNum}
+                          </button>
+                        ))}
+                        
+                        {/* Next button */}
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                          style={{
+                            padding:"8px 16px",
+                            borderRadius:8,
+                            border:`1.5px solid ${C.border}`,
+                            background: currentPage === totalPages ? "#f1f5f9" : "#fff",
+                            color: currentPage === totalPages ? C.muted : C.dark,
+                            cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                            fontSize:13,
+                            fontWeight:600,
+                            opacity: currentPage === totalPages ? 0.5 : 1
+                          }}
+                        >
+                          Next ▶
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
