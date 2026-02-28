@@ -105,6 +105,10 @@ export default function App(){
   const [filterParty, setFilterParty] = useState("All");
   const [filterDate, setFilterDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("current");
+  
+  // NEW: Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(50); // Show 50 entries per page
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -236,6 +240,18 @@ export default function App(){
     
     return result;
   }, [entries, filterParty, filterDate, filterMonth, filterP]);
+  
+  // NEW: Pagination calculations
+  const totalEntries = dashFiltered.length;
+  const totalPages = Math.ceil(totalEntries / entriesPerPage);
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const endIndex = startIndex + entriesPerPage;
+  const currentEntries = dashFiltered.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterParty, filterDate, filterMonth, filterP]);
   
   // Calculate statistics
   const today = nowDate();
@@ -418,8 +434,8 @@ export default function App(){
                     <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
                       <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {dashFiltered.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
-                        {dashFiltered.map(e=>(
+                        {currentEntries.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
+                        {currentEntries.map(e=>(
                           <tr key={e.firestoreId||e.id}>
                             <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
                             <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
@@ -439,6 +455,78 @@ export default function App(){
                     </table>
                   </div>
                   <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>💡 Swipe left/right to see all columns</div>
+                  
+                  {/* NEW: Pagination Controls */}
+                  {totalEntries > 0 && (
+                    <div style={{marginTop:20,paddingTop:20,borderTop:`2px solid ${C.border}`}}>
+                      {/* Status: Showing X-Y of Z entries */}
+                      <div style={{fontSize:13,color:C.mid,marginBottom:12,textAlign:"center"}}>
+                        Showing <strong>{startIndex + 1}-{Math.min(endIndex, totalEntries)}</strong> of <strong>{totalEntries}</strong> entries
+                      </div>
+                      
+                      {/* Pagination buttons */}
+                      <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        {/* Previous button */}
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          style={{
+                            padding:"8px 16px",
+                            borderRadius:8,
+                            border:`1.5px solid ${C.border}`,
+                            background: currentPage === 1 ? "#f1f5f9" : "#fff",
+                            color: currentPage === 1 ? C.muted : C.dark,
+                            cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                            fontSize:13,
+                            fontWeight:600,
+                            opacity: currentPage === 1 ? 0.5 : 1
+                          }}
+                        >
+                          ◀ Previous
+                        </button>
+                        
+                        {/* Page numbers */}
+                        {Array.from({length: totalPages}, (_, i) => i + 1).map(pageNum => (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            style={{
+                              padding:"8px 14px",
+                              borderRadius:8,
+                              border:`1.5px solid ${currentPage === pageNum ? "#0f172a" : C.border}`,
+                              background: currentPage === pageNum ? "#0f172a" : "#fff",
+                              color: currentPage === pageNum ? "#fff" : C.dark,
+                              cursor:"pointer",
+                              fontSize:13,
+                              fontWeight: currentPage === pageNum ? 700 : 600,
+                              minWidth:40
+                            }}
+                          >
+                            {pageNum}
+                          </button>
+                        ))}
+                        
+                        {/* Next button */}
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                          style={{
+                            padding:"8px 16px",
+                            borderRadius:8,
+                            border:`1.5px solid ${C.border}`,
+                            background: currentPage === totalPages ? "#f1f5f9" : "#fff",
+                            color: currentPage === totalPages ? C.muted : C.dark,
+                            cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                            fontSize:13,
+                            fontWeight:600,
+                            opacity: currentPage === totalPages ? 0.5 : 1
+                          }}
+                        >
+                          Next ▶
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
