@@ -294,6 +294,34 @@ export default function App(){
   // Filtered summary statistics
   const filteredNetMT = dashFiltered.filter(e => e.netWeight).reduce((s, e) => s + e.netWeight, 0) / 1000;
   
+  // NEW: Date-wise summary calculation
+  const dateSummary = useMemo(() => {
+    // Get current month entries only
+    const currentMonthEntries = entries.filter(e => 
+      e.date && 
+      e.date.startsWith(currentMonth) && 
+      e.status === "Completed"
+    );
+    
+    // Group by date
+    const grouped = currentMonthEntries.reduce((acc, entry) => {
+      const date = entry.date;
+      if (!acc[date]) {
+        acc[date] = {
+          date: date,
+          count: 0,
+          totalWeight: 0
+        };
+      }
+      acc[date].count += 1;
+      acc[date].totalWeight += (entry.netWeight || 0);
+      return acc;
+    }, {});
+    
+    // Convert to array and sort by date (newest first)
+    return Object.values(grouped).sort((a, b) => b.date.localeCompare(a.date));
+  }, [entries, currentMonth]);
+  
   // Get available months from entries
   const availableMonths = [...new Set(entries.map(e => e.date ? e.date.slice(0, 7) : null).filter(Boolean))].sort().reverse();
   
@@ -426,6 +454,62 @@ export default function App(){
                     </div>
                   </div>
                 )}
+                
+                {/* NEW: Date-wise Summary Card */}
+                <div style={{background:C.card,borderRadius:12,padding:"20px",marginBottom:22}}>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+                    📅 Daily Summary - {formatMonth(currentMonth)}
+                  </div>
+                  
+                  {dateSummary.length === 0 ? (
+                    <div style={{textAlign:"center",padding:"30px 20px",color:C.muted,fontSize:13}}>
+                      No completed entries this month yet
+                    </div>
+                  ) : (
+                    <>
+                      {/* Table for date summary */}
+                      <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                          <thead>
+                            <tr style={{borderBottom:`2px solid ${C.border}`}}>
+                              <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Date</th>
+                              <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Vehicles</th>
+                              <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Total Weight</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dateSummary.map((day, index) => (
+                              <tr key={day.date} style={{borderBottom: index === dateSummary.length - 1 ? "none" : `1px solid ${C.border}`}}>
+                                <td style={{padding:"12px",fontWeight:600,color:C.dark}}>{fmtDate(day.date)}</td>
+                                <td style={{padding:"12px",textAlign:"center",fontWeight:600,color:"#2563eb"}}>{day.count}</td>
+                                <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{kg(day.totalWeight)} kg</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      {/* Monthly total summary */}
+                      <div style={{marginTop:16,paddingTop:16,borderTop:`2px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.dark}}>
+                          Month Total:
+                        </div>
+                        <div style={{display:"flex",gap:20,fontSize:13}}>
+                          <span style={{fontWeight:600,color:"#2563eb"}}>
+                            {dateSummary.reduce((sum, day) => sum + day.count, 0)} vehicles
+                          </span>
+                          <span style={{fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>
+                            {kg(dateSummary.reduce((sum, day) => sum + day.totalWeight, 0))} kg
+                          </span>
+                          <span style={{fontWeight:700,color:"#16a34a"}}>
+                            ({(dateSummary.reduce((sum, day) => sum + day.totalWeight, 0) / 1000).toFixed(2)} MT)
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                
                 <div style={{background:C.card,borderRadius:12,padding:"20px"}}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📋 Entries</div>
                   {filterParty==="All"&&<input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>}
