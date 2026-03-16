@@ -106,6 +106,10 @@ export default function App(){
   const [filterDate, setFilterDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("current");
   
+  // NEW: Date Range filter state
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  
   // NEW: Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(50); // Show 50 entries per page
@@ -227,13 +231,16 @@ export default function App(){
       result = result.filter(e => e.partyName && e.partyName.trim().toLowerCase() === target);
     }
     
-    // Date filter
-    if(filterDate) {
+    // Date Range filter (takes priority over single date and month)
+    if(filterDateFrom && filterDateTo) {
+      result = result.filter(e => e.date && e.date >= filterDateFrom && e.date <= filterDateTo);
+    }
+    // Single Date filter (only if no date range)
+    else if(filterDate) {
       result = result.filter(e => e.date === filterDate);
     }
-    
-    // Month filter
-    if(filterMonth !== "all") {
+    // Month filter (only if no date range and no single date)
+    else if(filterMonth !== "all") {
       const monthKey = filterMonth === "current" ? nowDate().slice(0, 7) : filterMonth;
       result = result.filter(e => e.date && e.date.startsWith(monthKey));
     }
@@ -245,7 +252,7 @@ export default function App(){
     }
     
     return result;
-  }, [entries, filterParty, filterDate, filterMonth, filterP]);
+  }, [entries, filterParty, filterDate, filterMonth, filterP, filterDateFrom, filterDateTo]);
   
   // NEW: Pagination calculations
   const totalEntries = dashFiltered.length;
@@ -257,7 +264,7 @@ export default function App(){
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterParty, filterDate, filterMonth, filterP]);
+  }, [filterParty, filterDate, filterMonth, filterP, filterDateFrom, filterDateTo]);
   
   // Calculate statistics
   const today = nowDate();
@@ -447,17 +454,54 @@ export default function App(){
                       </select>
                     </div>
                   </div>
+                  
+                  {/* NEW: Date Range Filter */}
+                  <div style={{marginBottom:12,padding:"12px",background:"#f8fafc",borderRadius:8,border:`1px solid ${C.border}`}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.mid,marginBottom:8}}>📅 Date Range (Optional)</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:600,color:C.mid,marginBottom:3,display:"block"}}>From Date</label>
+                        <input 
+                          type="date" 
+                          value={filterDateFrom} 
+                          onChange={e=>setFilterDateFrom(e.target.value)} 
+                          style={{...inp,fontSize:12}}
+                        />
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:600,color:C.mid,marginBottom:3,display:"block"}}>To Date</label>
+                        <input 
+                          type="date" 
+                          value={filterDateTo} 
+                          onChange={e=>setFilterDateTo(e.target.value)} 
+                          style={{...inp,fontSize:12}}
+                        />
+                      </div>
+                      {(filterDateFrom || filterDateTo) && (
+                        <div style={{display:"flex",alignItems:"flex-end"}}>
+                          <button 
+                            onClick={()=>{setFilterDateFrom("");setFilterDateTo("");}} 
+                            style={{...secondaryBtn,fontSize:11,padding:"8px 12px",height:"fit-content"}}
+                          >
+                            Clear Range
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>{setFilterParty("All");setFilterDate("");setFilterMonth("current");setFilterP("");}} style={secondaryBtn}>Clear Filters</button>
+                    <button onClick={()=>{setFilterParty("All");setFilterDate("");setFilterMonth("current");setFilterP("");setFilterDateFrom("");setFilterDateTo("");}} style={secondaryBtn}>Clear All Filters</button>
                   </div>
                 </div>
-                {(filterParty!=="All"||filterDate||filterMonth!=="current"||filterP)&&(
+                {(filterParty!=="All"||filterDate||filterMonth!=="current"||filterP||filterDateFrom||filterDateTo)&&(
                   <div style={{background:"#eff6ff",border:"2px solid #93c5fd",borderRadius:12,padding:"16px",marginBottom:14}}>
                     <div style={{fontSize:13,fontWeight:700,color:"#1e40af",marginBottom:8}}>📊 Filtered Results</div>
                     <div style={{fontSize:12,color:"#1e40af"}}>
                       {filterParty!=="All"&&<div>• Party: <strong>{filterParty}</strong></div>}
-                      {filterDate&&<div>• Date: <strong>{fmtDate(filterDate)}</strong></div>}
-                      {filterMonth!=="current"&&filterMonth!=="all"&&<div>• Month: <strong>{formatMonth(filterMonth)}</strong></div>}
+                      {filterDateFrom&&filterDateTo&&<div>• Date Range: <strong>{fmtDate(filterDateFrom)} - {fmtDate(filterDateTo)}</strong></div>}
+                      {filterDate&&!filterDateFrom&&!filterDateTo&&<div>• Date: <strong>{fmtDate(filterDate)}</strong></div>}
+                      {filterMonth!=="current"&&filterMonth!=="all"&&!filterDateFrom&&!filterDateTo&&<div>• Month: <strong>{formatMonth(filterMonth)}</strong></div>}
                       {filterP&&<div>• Search: <strong>{filterP}</strong></div>}
                       <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #93c5fd"}}>
                         Total Entries: <strong>{dashFiltered.length}</strong> • 
