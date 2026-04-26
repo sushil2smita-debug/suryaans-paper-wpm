@@ -120,9 +120,9 @@ export default function App(){
   // NEW: Daily Summary selected month (defaults to current month)
   const [dailySummaryMonth, setDailySummaryMonth] = useState("current");
   
-  // NEW: Party-wise Summary state
-  const [partyWiseSummaryExpanded, setPartyWiseSummaryExpanded] = useState(false);
-  const [partyWiseSummaryDate, setPartyWiseSummaryDate] = useState("");
+  // NEW: Party-wise Daily Summary state
+  const [partyWiseExpanded, setPartyWiseExpanded] = useState(false);
+  const [partyWiseDate, setPartyWiseDate] = useState(nowDate());
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -345,18 +345,15 @@ export default function App(){
   // Get selected month name for display
   const selectedMonthName = dailySummaryMonth === "current" ? currentMonth : dailySummaryMonth;
   
-  // NEW: Party-wise Summary calculation
+  // NEW: Party-wise Daily Summary calculation
   const partyWiseSummary = useMemo(() => {
-    // Use selected date or default to today
-    const targetDate = partyWiseSummaryDate || today;
-    
-    // Get entries for selected date (only completed)
+    // Get entries for selected date only (completed entries)
     const dateEntries = entries.filter(e => 
-      e.date === targetDate && 
+      e.date === partyWiseDate && 
       e.status === "Completed"
     );
     
-    // Group by party
+    // Group by party name
     const grouped = dateEntries.reduce((acc, entry) => {
       const party = entry.partyName || "Unknown";
       if (!acc[party]) {
@@ -373,14 +370,7 @@ export default function App(){
     
     // Convert to array and sort by total weight (highest first)
     return Object.values(grouped).sort((a, b) => b.totalWeight - a.totalWeight);
-  }, [entries, partyWiseSummaryDate, today]);
-  
-  // Set default date to today on mount
-  useEffect(() => {
-    if (!partyWiseSummaryDate) {
-      setPartyWiseSummaryDate(today);
-    }
-  }, [today, partyWiseSummaryDate]);
+  }, [entries, partyWiseDate]);
   
   // Get available months from entries
   const availableMonths = [...new Set(entries.map(e => e.date ? e.date.slice(0, 7) : null).filter(Boolean))].sort().reverse();
@@ -557,7 +547,7 @@ export default function App(){
                   {/* Header - Always visible */}
                   <div style={{
                     padding:"16px 20px",
-                    background: partyWiseSummaryExpanded ? "#f8fafc" : "#fff",
+                    background: partyWiseExpanded ? "#f8fafc" : "#fff",
                     transition:"background 0.2s"
                   }}>
                     {/* Top row: Title and expand button */}
@@ -565,13 +555,13 @@ export default function App(){
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
                         <span style={{fontSize:20}}>📊</span>
                         <div style={{fontSize:14,fontWeight:700,color:C.dark}}>
-                          Party-wise Daily Summary
+                          Party-wise Summary
                         </div>
                       </div>
                       
                       {/* Expand/Collapse button */}
                       <button
-                        onClick={() => setPartyWiseSummaryExpanded(!partyWiseSummaryExpanded)}
+                        onClick={() => setPartyWiseExpanded(!partyWiseExpanded)}
                         style={{
                           background:"none",
                           border:"none",
@@ -579,7 +569,7 @@ export default function App(){
                           fontWeight:700,
                           color:C.mid,
                           cursor:"pointer",
-                          transform: partyWiseSummaryExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          transform: partyWiseExpanded ? "rotate(180deg)" : "rotate(0deg)",
                           transition:"transform 0.3s",
                           padding:0
                         }}
@@ -595,8 +585,9 @@ export default function App(){
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
                         <input 
                           type="date" 
-                          value={partyWiseSummaryDate} 
-                          onChange={(e) => setPartyWiseSummaryDate(e.target.value)}
+                          value={partyWiseDate} 
+                          onChange={(e) => setPartyWiseDate(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
                           style={{
                             ...inp,
                             padding:"6px 10px",
@@ -612,7 +603,6 @@ export default function App(){
                       {partyWiseSummary.length > 0 && (
                         <div style={{fontSize:12,color:C.mid}}>
                           {partyWiseSummary.reduce((sum, p) => sum + p.count, 0)} vehicles • {" "}
-                          {kg(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0))} kg • {" "}
                           {(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT
                         </div>
                       )}
@@ -620,47 +610,40 @@ export default function App(){
                   </div>
                   
                   {/* Expandable content - Shows when expanded */}
-                  {partyWiseSummaryExpanded && (
+                  {partyWiseExpanded && (
                     <div style={{padding:"0 20px 20px 20px",background:"#fff"}}>
                       {partyWiseSummary.length === 0 ? (
                         <div style={{textAlign:"center",padding:"30px 20px",color:C.muted,fontSize:13}}>
-                          No completed entries for {fmtDate(partyWiseSummaryDate)}
+                          No completed entries on {fmtDate(partyWiseDate)}
                         </div>
                       ) : (
                         <>
-                          {/* Table for party summary */}
+                          {/* Table for party-wise summary */}
                           <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:16}}>
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                               <thead>
                                 <tr style={{borderBottom:`2px solid ${C.border}`}}>
                                   <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase",width:40}}>#</th>
                                   <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Party Name</th>
-                                  <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase",width:100}}>Vehicles</th>
-                                  <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase",width:140}}>Weight</th>
+                                  <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Vehicles</th>
+                                  <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Total</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {partyWiseSummary.map((party, index) => (
                                   <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid ${C.border}`}}>
-                                    <td style={{padding:"12px",fontWeight:600,color:C.mid}}>{index + 1}</td>
+                                    <td style={{padding:"12px",fontWeight:600,color:C.mid,fontSize:12}}>{index + 1}</td>
                                     <td style={{padding:"12px",fontWeight:600,color:C.dark}}>{party.partyName}</td>
                                     <td style={{padding:"12px",textAlign:"center",fontWeight:600,color:"#2563eb"}}>({party.count})</td>
-                                    <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>
-                                      {(party.totalWeight / 1000).toFixed(3)} MT
-                                    </td>
+                                    <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(party.totalWeight / 1000).toFixed(3)} MT</td>
                                   </tr>
                                 ))}
                               </tbody>
-                              {/* Total row */}
                               <tfoot>
-                                <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
-                                  <td colSpan={2} style={{padding:"12px",fontWeight:700,color:C.dark}}>Total:</td>
-                                  <td style={{padding:"12px",textAlign:"center",fontWeight:700,color:"#2563eb"}}>
-                                    ({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})
-                                  </td>
-                                  <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>
-                                    {(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT
-                                  </td>
+                                <tr style={{borderTop:`2px solid ${C.border}`}}>
+                                  <td colSpan="2" style={{padding:"12px",fontWeight:700,color:C.dark}}>Total:</td>
+                                  <td style={{padding:"12px",textAlign:"center",fontWeight:700,color:"#2563eb"}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
+                                  <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT</td>
                                 </tr>
                               </tfoot>
                             </table>
