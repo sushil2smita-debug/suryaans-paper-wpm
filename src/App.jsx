@@ -15,7 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
+const PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","J.B Traders","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
 const QUALITY_CHECKERS = ["Sushil","Amit","Milan","Dhirendar","GS Dubey","Ajay Singh","Surajit"];
 const WEIGHMENT_PERSONS = ["Sushil","Amit","Milan","Security","Surajit"];
 const MATERIAL_GRADES = ["Local Waste paper Cuttings","Local waste paper Box","Sack Kraft (SMK)","DSOCC","NDLKC","Fruit Box","Tabocco Box","OCC 98/2","OCC","DSOCC Wallmart","DSOCC Shoprite","Industrial box","Sack Kraft","Shopping Bag"];
@@ -119,6 +119,10 @@ export default function App(){
   
   // NEW: Daily Summary selected month (defaults to current month)
   const [dailySummaryMonth, setDailySummaryMonth] = useState("current");
+  
+  // NEW: Party-wise Daily Summary state
+  const [partyWiseExpanded, setPartyWiseExpanded] = useState(false);
+  const [partyWiseDate, setPartyWiseDate] = useState(nowDate());
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -341,6 +345,33 @@ export default function App(){
   // Get selected month name for display
   const selectedMonthName = dailySummaryMonth === "current" ? currentMonth : dailySummaryMonth;
   
+  // NEW: Party-wise Daily Summary calculation
+  const partyWiseSummary = useMemo(() => {
+    // Get entries for selected date only (completed entries)
+    const dateEntries = entries.filter(e => 
+      e.date === partyWiseDate && 
+      e.status === "Completed"
+    );
+    
+    // Group by party name
+    const grouped = dateEntries.reduce((acc, entry) => {
+      const party = entry.partyName || "Unknown";
+      if (!acc[party]) {
+        acc[party] = {
+          partyName: party,
+          count: 0,
+          totalWeight: 0
+        };
+      }
+      acc[party].count += 1;
+      acc[party].totalWeight += (entry.netWeight || 0);
+      return acc;
+    }, {});
+    
+    // Convert to array and sort by total weight (highest first)
+    return Object.values(grouped).sort((a, b) => b.totalWeight - a.totalWeight);
+  }, [entries, partyWiseDate]);
+  
   // Get available months from entries
   const availableMonths = [...new Set(entries.map(e => e.date ? e.date.slice(0, 7) : null).filter(Boolean))].sort().reverse();
   
@@ -510,6 +541,118 @@ export default function App(){
                     </div>
                   </div>
                 )}
+                
+                {/* NEW: Party-wise Daily Summary Card */}
+                <div style={{background:C.card,borderRadius:12,marginBottom:22,overflow:"hidden",border:`2px solid ${C.border}`}}>
+                  {/* Header - Always visible */}
+                  <div style={{
+                    padding:"16px 20px",
+                    background: partyWiseExpanded ? "#f8fafc" : "#fff",
+                    transition:"background 0.2s"
+                  }}>
+                    {/* Top row: Title and expand button */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:20}}>📊</span>
+                        <div style={{fontSize:14,fontWeight:700,color:C.dark}}>
+                          Party-wise Summary
+                        </div>
+                      </div>
+                      
+                      {/* Expand/Collapse button */}
+                      <button
+                        onClick={() => setPartyWiseExpanded(!partyWiseExpanded)}
+                        style={{
+                          background:"none",
+                          border:"none",
+                          fontSize:20,
+                          fontWeight:700,
+                          color:C.mid,
+                          cursor:"pointer",
+                          transform: partyWiseExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          transition:"transform 0.3s",
+                          padding:0
+                        }}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                    
+                    {/* Second row: Date selector and summary */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                      {/* Date selector */}
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
+                        <input 
+                          type="date" 
+                          value={partyWiseDate} 
+                          onChange={(e) => setPartyWiseDate(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            ...inp,
+                            padding:"6px 10px",
+                            fontSize:13,
+                            fontWeight:600,
+                            cursor:"pointer",
+                            minWidth:140
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Summary totals */}
+                      {partyWiseSummary.length > 0 && (
+                        <div style={{fontSize:12,color:C.mid}}>
+                          {partyWiseSummary.reduce((sum, p) => sum + p.count, 0)} vehicles • {" "}
+                          {(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Expandable content - Shows when expanded */}
+                  {partyWiseExpanded && (
+                    <div style={{padding:"0 20px 20px 20px",background:"#fff"}}>
+                      {partyWiseSummary.length === 0 ? (
+                        <div style={{textAlign:"center",padding:"30px 20px",color:C.muted,fontSize:13}}>
+                          No completed entries on {fmtDate(partyWiseDate)}
+                        </div>
+                      ) : (
+                        <>
+                          {/* Table for party-wise summary */}
+                          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:16}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                              <thead>
+                                <tr style={{borderBottom:`2px solid ${C.border}`}}>
+                                  <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase",width:40}}>#</th>
+                                  <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Party Name</th>
+                                  <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Vehicles</th>
+                                  <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {partyWiseSummary.map((party, index) => (
+                                  <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid ${C.border}`}}>
+                                    <td style={{padding:"12px",fontWeight:600,color:C.mid,fontSize:12}}>{index + 1}</td>
+                                    <td style={{padding:"12px",fontWeight:600,color:C.dark}}>{party.partyName}</td>
+                                    <td style={{padding:"12px",textAlign:"center",fontWeight:600,color:"#2563eb"}}>({party.count})</td>
+                                    <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(party.totalWeight / 1000).toFixed(3)} MT</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr style={{borderTop:`2px solid ${C.border}`}}>
+                                  <td colSpan="2" style={{padding:"12px",fontWeight:700,color:C.dark}}>Total:</td>
+                                  <td style={{padding:"12px",textAlign:"center",fontWeight:700,color:"#2563eb"}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
+                                  <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
                 
                 {/* NEW: Collapsible Date-wise Summary Card */}
                 <div style={{background:C.card,borderRadius:12,marginBottom:22,overflow:"hidden",border:`2px solid ${C.border}`}}>
