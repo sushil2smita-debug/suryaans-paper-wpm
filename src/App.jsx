@@ -1,7 +1,6 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc, setDoc, getDoc, where, getDocs } from "firebase/firestore";
 
 // Firebase Config
 const firebaseConfig = {
@@ -17,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.3.0";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -155,16 +154,60 @@ export default function App(){
   }, []);
 
   useEffect(()=>{
-    const q = query(collection(db, "entries"), orderBy("savedAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ firestoreId: doc.id, ...doc.data() }));
-      setEntries(data);
+    // QUOTA FIX: Two-tier loading strategy
+    // 1. Load last 30 days ONCE (getDocs) — no live listener, saves reads
+    // 2. Live listener ONLY for today — catches new entries instantly
+    
+    const todayDate = nowDate();
+    
+    // One-time fetch for last 30 days (not live — saves massive quota)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+
+    const historyQuery = query(
+      collection(db, "entries"),
+      where("date", ">=", cutoffDate),
+      where("date", "<", todayDate),
+      orderBy("date", "desc"),
+      orderBy("savedAt", "desc")
+    );
+
+    // Fetch history once
+    getDocs(historyQuery).then((snapshot) => {
+      const historyData = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+      setEntries(prev => {
+        // Merge with today's entries already loaded
+        const todayEntries = prev.filter(e => e.date === todayDate);
+        const merged = [...todayEntries, ...historyData];
+        return merged;
+      });
       setLoading(false);
+    }).catch(e => {
+      console.error("History fetch error:", e);
+      setLoading(false);
+    });
+
+    // Live listener ONLY for today's entries — minimal reads
+    const todayQuery = query(
+      collection(db, "entries"),
+      where("date", "==", todayDate),
+      orderBy("savedAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(todayQuery, (snapshot) => {
+      const todayData = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+      setEntries(prev => {
+        // Replace today's entries, keep history
+        const historyEntries = prev.filter(e => e.date !== todayDate);
+        return [...todayData, ...historyEntries];
+      });
     }, (error) => {
       console.error("Firebase error:", error);
       showNotif("Failed to connect to Firebase","error");
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -407,11 +450,13 @@ export default function App(){
         acc[party] = {
           partyName: party,
           count: 0,
-          totalWeight: 0
+          totalWeight: 0,
+          totalAccepted: 0
         };
       }
       acc[party].count += 1;
       acc[party].totalWeight += (entry.netWeight || 0);
+      acc[party].totalAccepted += (entry.acceptedQty || 0);
       return acc;
     }, {});
     
@@ -694,6 +739,11 @@ export default function App(){
                           {partyWiseSummary.reduce((sum, p) => sum + p.count, 0)} vehicles • {" "}
                           {kg(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0))} kg • {" "}
                           {(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT
+                          {partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) > 0 && (
+                            <span style={{color:"#d97706",fontWeight:700}}>
+                              {" "}• Acc: {(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)} MT
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -716,7 +766,8 @@ export default function App(){
                                   <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:28}}>#</th>
                                   <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
                                   <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:48}}>Veh</th>
-                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>MT</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>Net MT</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:72}}>Acc MT</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -726,6 +777,7 @@ export default function App(){
                                     <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,fontSize:12}}>{party.partyName}</td>
                                     <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({party.count})</td>
                                     <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -734,6 +786,7 @@ export default function App(){
                                   <td colSpan="2" style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
                                   <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
                                   <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
                                 </tr>
                               </tfoot>
                             </table>
