@@ -15,6 +15,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// APP VERSION — bump this number when deploying to force browser cache refresh
+const APP_VERSION = "2.1.0";
+
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
 const QUALITY_CHECKERS = ["Sushil","Amit","Milan","Dhirendar","GS Dubey","Ajay Singh","Surajit"];
@@ -1153,7 +1156,7 @@ export default function App(){
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{color:"#475569",fontSize:10,textTransform:"uppercase"}}>Firebase Real-time Sync</div>
-          <div style={{color:"#334155",fontSize:11,marginTop:3}}>By <span style={{color:"#dc2626",fontWeight:700}}>{COMPANY.creator}</span></div>
+          <div style={{color:"#334155",fontSize:11,marginTop:3}}>By <span style={{color:"#dc2626",fontWeight:700}}>{COMPANY.creator}</span> <span style={{color:"#1e3a5f",fontSize:10}}>v{APP_VERSION}</span></div>
         </div>
       </footer>
     </div>
