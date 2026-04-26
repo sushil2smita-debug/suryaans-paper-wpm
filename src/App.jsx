@@ -130,6 +130,8 @@ export default function App(){
   const [partyWiseDate, setPartyWiseDate] = useState(nowDate());
   const [newPartyInput, setNewPartyInput] = useState("");
   const [showManageParties, setShowManageParties] = useState(false);
+  // VIEW MODE: if true, load only last 30 days (saves reads for view-only staff)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem("wpm_view_mode") === "true");
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -158,30 +160,48 @@ export default function App(){
     const CACHE_KEY = "wpm_history_cache";
     const CACHE_DATE_KEY = "wpm_history_date";
 
-    // STEP 1: Load history — only last 6 months cached, older fetched on demand
+    // STEP 1: Load history — bust old incomplete cache, fetch ALL entries fresh
+    const CACHE_VERSION = "v3_all"; // bump this version to force fresh fetch when cache logic changes
     const loadHistory = () => {
       const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
       const cachedData = localStorage.getItem(CACHE_KEY);
+      const cachedVersion = localStorage.getItem(CACHE_KEY + "_ver");
 
-      if(cachedDate === todayDate && cachedData){
-        // Cache exists — zero Firebase reads for all subsequent opens today
+      // Only use cache if: same day AND same version (version mismatch = old incomplete cache)
+      if(cachedDate === todayDate && cachedData && cachedVersion === CACHE_VERSION){
+        // Cache exists and is current version — zero Firebase reads
         try{
           return Promise.resolve(JSON.parse(cachedData));
         }catch(e){
           localStorage.removeItem(CACHE_KEY);
           localStorage.removeItem(CACHE_DATE_KEY);
+          localStorage.removeItem(CACHE_KEY + "_ver");
         }
       }
 
-      // First open of day — fetch ALL historical entries (before today)
-      // No date cutoff so all 2100+ entries are loaded correctly
-      // Cache stores only last 12 months to stay under 5MB localStorage limit
-      // Older data still shows in app (from Firebase fetch), just not cached
-      return getDocs(query(
-        collection(db, "entries"),
-        where("date", "<", todayDate),
-        orderBy("date", "desc")
-      )).then((snap) => {
+      // First open of day — fetch history from Firebase
+      // View Mode ON  → last 30 days only (saves reads for view-only staff)
+      // View Mode OFF → all history (needed for entry staff to generate correct IDs)
+      const isViewMode = localStorage.getItem("wpm_view_mode") === "true";
+      let historyQuery;
+      if(isViewMode){
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const cutoff = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+        historyQuery = query(
+          collection(db, "entries"),
+          where("date", ">=", cutoff),
+          where("date", "<", todayDate),
+          orderBy("date", "desc")
+        );
+      } else {
+        historyQuery = query(
+          collection(db, "entries"),
+          where("date", "<", todayDate),
+          orderBy("date", "desc")
+        );
+      }
+      return getDocs(historyQuery).then((snap) => {
         const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }))
           .sort((a,b) => (b.date||"").localeCompare(a.date||""));
 
@@ -196,13 +216,16 @@ export default function App(){
         const saveCache = () => {
           localStorage.setItem(CACHE_KEY, JSON.stringify(dataToCache));
           localStorage.setItem(CACHE_DATE_KEY, todayDate);
+          localStorage.setItem(CACHE_KEY + "_ver", CACHE_VERSION); // mark version
         };
         try{
           saveCache();
         }catch(e){
           try{
+            // Clear ALL old cache keys and retry
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_DATE_KEY);
+            localStorage.removeItem(CACHE_KEY + "_ver");
             saveCache();
           }catch(e2){
             console.log("localStorage full, running without cache today:", e2);
@@ -585,7 +608,7 @@ export default function App(){
               <span className="mobile-text">{COMPANY.name}</span>
             </div>
             <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>
-              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries</span>
+              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries {viewMode ? "• 👁 View Mode" : ""}</span>
               <span className="mobile-text">{entries.length} Entries</span>
             </div>
           </div>
@@ -594,6 +617,19 @@ export default function App(){
           <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>
             <span className="desktop-text">📊 Dashboard</span>
             <span className="mobile-text">📊</span>
+          </button>
+          <button style={{...navBtn(false),background:viewMode?"#854d0e":"#1e3a5f",fontSize:11,padding:"6px 10px"}} onClick={()=>{
+            const next = !viewMode;
+            setViewMode(next);
+            localStorage.setItem("wpm_view_mode", next ? "true" : "false");
+            // Clear cache so next reload fetches correct data range
+            localStorage.removeItem("wpm_history_cache");
+            localStorage.removeItem("wpm_history_date");
+            localStorage.removeItem("wpm_history_cache_ver");
+            window.location.reload();
+          }}>
+            <span className="desktop-text">{viewMode ? "👁 View Mode ON" : "👁 View Mode OFF"}</span>
+            <span className="mobile-text">👁</span>
           </button>
           <button style={{...navBtn(false),background:"#1e3a5f"}} onClick={()=>setShowManageParties(v=>!v)}>
             <span className="desktop-text">🏢 Parties</span>
