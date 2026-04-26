@@ -173,31 +173,34 @@ export default function App(){
         }
       }
 
-      // First open of day — fetch only last 6 months (keeps cache under 2MB forever)
-      // 6 months × 65 vehicles × 25 days = ~9,750 entries × 400 bytes = ~3.7MB max
-      // But we store only key fields in cache to keep it small
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const cutoffDate = sixMonthsAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
-
+      // First open of day — fetch ALL historical entries (before today)
+      // No date cutoff so all 2100+ entries are loaded correctly
+      // Cache stores only last 12 months to stay under 5MB localStorage limit
+      // Older data still shows in app (from Firebase fetch), just not cached
       return getDocs(query(
         collection(db, "entries"),
-        where("date", ">=", cutoffDate),
         where("date", "<", todayDate),
         orderBy("date", "desc")
       )).then((snap) => {
         const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }))
           .sort((a,b) => (b.date||"").localeCompare(a.date||""));
-        // Try to cache — if localStorage is full, clear old cache and retry once
+
+        // Cache only last 12 months to stay safely under 5MB localStorage limit forever
+        // (12mo × 65 vehicles × 25 days × 400 bytes = ~7.4MB max, but real entries are ~180 bytes avg)
+        // All data is returned to app — only cache is limited, not what you see
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+        const cacheFrom = twelveMonthsAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+        const dataToCache = data.filter(d => (d.date||"") >= cacheFrom);
+
         const saveCache = () => {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+          localStorage.setItem(CACHE_KEY, JSON.stringify(dataToCache));
           localStorage.setItem(CACHE_DATE_KEY, todayDate);
         };
         try{
           saveCache();
         }catch(e){
           try{
-            // Clear old cache and retry
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_DATE_KEY);
             saveCache();
@@ -205,7 +208,7 @@ export default function App(){
             console.log("localStorage full, running without cache today:", e2);
           }
         }
-        return data;
+        return data; // Return ALL data to the app (not just cached portion)
       });
     };
 
