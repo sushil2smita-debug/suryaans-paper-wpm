@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.2";
+const APP_VERSION = "2.4.3";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -158,13 +158,13 @@ export default function App(){
     const CACHE_KEY = "wpm_history_cache";
     const CACHE_DATE_KEY = "wpm_history_date";
 
-    // STEP 1: Load history (once only)
+    // STEP 1: Load ALL history (cached after first load of the day)
     const loadHistory = () => {
       const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
       const cachedData = localStorage.getItem(CACHE_KEY);
 
       if(cachedDate === todayDate && cachedData){
-        // Cache exists — zero Firebase reads
+        // Cache exists — zero Firebase reads for all subsequent opens today
         try{
           return Promise.resolve(JSON.parse(cachedData));
         }catch(e){
@@ -172,14 +172,9 @@ export default function App(){
           localStorage.removeItem(CACHE_DATE_KEY);
         }
       }
-      // First open of day — fetch from Firebase
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const cutoffDate = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone:"Asia/Kolkata"});
-
+      // First open of day — fetch ALL history from Firebase and cache it
       return getDocs(query(
         collection(db, "entries"),
-        where("date", ">=", cutoffDate),
         where("date", "<", todayDate)
       )).then((snap) => {
         const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }))
@@ -187,7 +182,7 @@ export default function App(){
         try{
           localStorage.setItem(CACHE_KEY, JSON.stringify(data));
           localStorage.setItem(CACHE_DATE_KEY, todayDate);
-        }catch(e){}
+        }catch(e){ console.log("Cache full, skipping:", e); }
         return data;
       });
     };
