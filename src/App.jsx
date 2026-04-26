@@ -158,7 +158,7 @@ export default function App(){
     const CACHE_KEY = "wpm_history_cache";
     const CACHE_DATE_KEY = "wpm_history_date";
 
-    // STEP 1: Load ALL history (cached after first load of the day)
+    // STEP 1: Load history — only last 6 months cached, older fetched on demand
     const loadHistory = () => {
       const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
       const cachedData = localStorage.getItem(CACHE_KEY);
@@ -172,48 +172,68 @@ export default function App(){
           localStorage.removeItem(CACHE_DATE_KEY);
         }
       }
-      // First open of day — fetch ALL history from Firebase and cache it
+
+      // First open of day — fetch only last 6 months (keeps cache under 2MB forever)
+      // 6 months × 65 vehicles × 25 days = ~9,750 entries × 400 bytes = ~3.7MB max
+      // But we store only key fields in cache to keep it small
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const cutoffDate = sixMonthsAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+
       return getDocs(query(
         collection(db, "entries"),
-        where("date", "<", todayDate)
+        where("date", ">=", cutoffDate),
+        where("date", "<", todayDate),
+        orderBy("date", "desc")
       )).then((snap) => {
         const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }))
           .sort((a,b) => (b.date||"").localeCompare(a.date||""));
-        try{
+        // Try to cache — if localStorage is full, clear old cache and retry once
+        const saveCache = () => {
           localStorage.setItem(CACHE_KEY, JSON.stringify(data));
           localStorage.setItem(CACHE_DATE_KEY, todayDate);
-        }catch(e){ console.log("Cache full, skipping:", e); }
+        };
+        try{
+          saveCache();
+        }catch(e){
+          try{
+            // Clear old cache and retry
+            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(CACHE_DATE_KEY);
+            saveCache();
+          }catch(e2){
+            console.log("localStorage full, running without cache today:", e2);
+          }
+        }
         return data;
       });
     };
 
-    // STEP 2: Start live listener for today only
-    let historyData = [];
+    // STEP 2: Wait for history FIRST, then start live listener
+    let unsubscribe = () => {};
 
     loadHistory().then(history => {
-      historyData = history || [];
-      setLoading(false);
+      const historyData = history || [];
+
+      // Now start the live listener — historyData is ready!
+      unsubscribe = onSnapshot(
+        query(collection(db, "entries"), where("date", "==", todayDate)),
+        (snapshot) => {
+          const todayData = snapshot.docs
+            .map(d => ({ firestoreId: d.id, ...d.data() }))
+            .sort((a,b) => (b.savedAt||"").localeCompare(a.savedAt||""));
+          setEntries([...todayData, ...historyData]);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Firebase error:", error);
+          setLoading(false);
+        }
+      );
     }).catch(e => {
       console.error("History load error:", e);
-      historyData = [];
       setLoading(false);
     });
-
-    // Live listener for today — no index needed, single field query
-    const unsubscribe = onSnapshot(
-      query(collection(db, "entries"), where("date", "==", todayDate)),
-      (snapshot) => {
-        const todayData = snapshot.docs
-          .map(d => ({ firestoreId: d.id, ...d.data() }))
-          .sort((a,b) => (b.savedAt||"").localeCompare(a.savedAt||""));
-        setEntries([...todayData, ...historyData]);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Firebase error:", error);
-        setLoading(false);
-      }
-    );
 
     return () => unsubscribe();
   }, []);
