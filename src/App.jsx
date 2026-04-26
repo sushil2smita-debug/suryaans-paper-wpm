@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, deleteDoc, setDoc, getDoc } from "firebase/firestore";
 
 // Firebase Config
 const firebaseConfig = {
@@ -15,7 +15,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
+// Default parties list — only used on FIRST TIME setup, then stored in Firebase
+const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
 const QUALITY_CHECKERS = ["Sushil","Amit","Milan","Dhirendar","GS Dubey","Ajay Singh","Surajit"];
 const WEIGHMENT_PERSONS = ["Sushil","Amit","Milan","Security","Surajit"];
 const MATERIAL_GRADES = ["Local Waste paper Cuttings","Local waste paper Box","Sack Kraft (SMK)","DSOCC","NDLKC","Fruit Box","Tabocco Box","OCC 98/2","OCC","DSOCC Wallmart","DSOCC Shoprite","Industrial box","Sack Kraft","Shopping Bag"];
@@ -92,6 +93,7 @@ function FSel({label,val,onChange,opts,full}){
 
 export default function App(){
   const [entries, setEntries] = useState([]);
+  const [PARTIES, setPARTIES] = useState(DEFAULT_PARTIES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState("dashboard");
@@ -123,9 +125,31 @@ export default function App(){
   // NEW: Party-wise Daily Summary state
   const [partyWiseExpanded, setPartyWiseExpanded] = useState(false);
   const [partyWiseDate, setPartyWiseDate] = useState(nowDate());
+  const [newPartyInput, setNewPartyInput] = useState("");
+  const [showManageParties, setShowManageParties] = useState(false);
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
+
+  // Load PARTIES from Firebase — live on ALL devices, no redeploy needed
+  useEffect(()=>{
+    const partiesDocRef = doc(db, "config", "parties");
+    // Listen for live updates
+    const unsub = onSnapshot(partiesDocRef, async (snap) => {
+      if(snap.exists()){
+        const data = snap.data();
+        if(data.list && data.list.length > 0){
+          setPARTIES([...data.list].sort());
+        }
+      } else {
+        // First time — seed Firebase with default list
+        try {
+          await setDoc(partiesDocRef, { list: DEFAULT_PARTIES });
+        } catch(e){ console.error("Could not seed parties:", e); }
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(()=>{
     const q = query(collection(db, "entries"), orderBy("savedAt", "desc"));
@@ -162,6 +186,26 @@ export default function App(){
     }
   }
 
+  async function addParty(name){
+    const trimmed = name.trim();
+    if(!trimmed) return showNotif("Party name cannot be empty","error");
+    if(PARTIES.map(p=>p.toLowerCase()).includes(trimmed.toLowerCase())) return showNotif("Party already exists","error");
+    const newList = [...PARTIES, trimmed].sort();
+    try{
+      await setDoc(doc(db,"config","parties"),{list:newList});
+      showNotif(`✓ Party "${trimmed}" added — live on all devices!`);
+    }catch(e){ showNotif("Failed to add party","error"); }
+  }
+
+  async function deleteParty(name){
+    if(!confirm(`Remove party "${name}" from the list?\n\nExisting entries will not be affected.`)) return;
+    const newList = PARTIES.filter(p=>p!==name);
+    try{
+      await setDoc(doc(db,"config","parties"),{list:newList});
+      showNotif(`✓ Party "${name}" removed`);
+    }catch(e){ showNotif("Failed to remove party","error"); }
+  }
+
   function showNotif(msg,type="success"){ setNotif({msg,type}); setTimeout(()=>setNotif(null),3500); }
 
   async function deleteEntry(entry){
@@ -187,7 +231,7 @@ export default function App(){
   }
 
   function startNew(){
-    setForm({ step:1, id:genId(), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
+    setForm({ step:1, id:genId(), date:nowDate(), grossTime:nowTime(), emptyTime:"", vehicleNo:"", partyName:"", partyWeight:"", ourGrossWeight:"", ourEmptyWeight:"", acceptedQty:"", weighmentPerson:"", qualityChecker:"", materialGrade:"", moisture:"", contamination:"", fiberQuality:"", remarks:"" });
     setPage("form");
   }
 
@@ -213,7 +257,7 @@ export default function App(){
     const gross=parseFloat(form.ourGrossWeight),empty=parseFloat(form.ourEmptyWeight);
     if(empty>=gross) return showNotif("Empty weight cannot be ≥ Gross weight","error");
     const net=gross-empty,diff=parseFloat(form.partyWeight)-net;
-    const entry={...form,emptyTime:nowTime(),ourEmptyWeight:empty,ourGrossWeight:gross,partyWeight:parseFloat(form.partyWeight),netWeight:net,weightDiff:diff,status:"Completed",savedAt:new Date().toISOString()};
+    const entry={...form,emptyTime:nowTime(),ourEmptyWeight:empty,ourGrossWeight:gross,partyWeight:parseFloat(form.partyWeight),netWeight:net,weightDiff:diff,acceptedQty:form.acceptedQty?parseFloat(form.acceptedQty):null,status:"Completed",savedAt:new Date().toISOString()};
     // FIX #6 — use form.firestoreId directly (set when draft was saved) instead of searching entries
     await saveEntry(entry);
     showNotif(`✓ Entry ${form.id} completed!`);
@@ -404,36 +448,78 @@ export default function App(){
       <style>{`
         input:focus,select:focus,textarea:focus{border-color:#0f172a!important;box-shadow:0 0 0 3px rgba(15,23,42,.1);}
         button:active{transform:scale(.98);}
+        .mobile-text { display: none; }
+        .desktop-text { display: inline; }
         @media (max-width: 768px) {
           .desktop-text { display: none !important; }
           .mobile-text { display: inline !important; }
         }
-        @media (min-width: 769px) {
-          .desktop-text { display: inline !important; }
-          .mobile-text { display: none !important; }
-        }
       `}</style>
       {notif&&<div style={{position:"fixed",top:72,right:20,background:notif.type==="success"?"#0f172a":"#dc2626",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:999,maxWidth:320}}>{notif.type==="success"?"✓ ":"⚠ "}{notif.msg}</div>}
       {saving&&<div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1e40af",color:"#fff",textAlign:"center",padding:"8px",fontSize:12,fontWeight:600}}>🔥 Syncing to Firebase...</div>}
+
+      {/* Manage Parties Panel */}
+      {showManageParties&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}} onClick={()=>setShowManageParties(false)}>
+          <div style={{background:"#fff",width:"100%",maxWidth:420,height:"100vh",overflowY:"auto",boxShadow:"-4px 0 24px rgba(0,0,0,0.2)",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={{background:"#0f172a",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15}}>🏢 Manage Parties</div>
+              <button onClick={()=>setShowManageParties(false)} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+            </div>
+            <div style={{padding:"16px"}}>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:12,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 12px"}}>
+                ✅ Parties are stored in <strong>Firebase</strong> — adding or removing here updates <strong>all devices instantly</strong>, no code change needed.
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:16}}>
+                <input
+                  type="text"
+                  placeholder="New party name..."
+                  value={newPartyInput}
+                  onChange={e=>setNewPartyInput(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"){ addParty(newPartyInput); setNewPartyInput(""); } }}
+                  style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none"}}
+                />
+                <button
+                  onClick={()=>{ addParty(newPartyInput); setNewPartyInput(""); }}
+                  style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                >+ Add</button>
+              </div>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:10,fontWeight:600}}>{PARTIES.length} PARTIES (A–Z)</div>
+              <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+                {PARTIES.map((p,i)=>(
+                  <div key={p} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:i===PARTIES.length-1?"none":"1px solid #f1f5f9",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <span style={{fontSize:13,fontWeight:500,color:"#0f172a"}}>{p}</span>
+                    <button onClick={()=>deleteParty(p)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:16,padding:"2px 6px",borderRadius:4}} title="Remove party">🗑</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header style={{background:"#0f172a",height:62,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px",position:"sticky",top:0,zIndex:200}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#dc2626,#991b1b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>♻</div>
           <div>
             <div style={{color:"#f8fafc",fontWeight:700,fontSize:15}}>
-              <span style={{display:"inline"}} className="desktop-text">{COMPANY.name} — RAWMATERIAL INWARD</span>
-              <span style={{display:"none"}} className="mobile-text">{COMPANY.name}</span>
+              <span className="desktop-text">{COMPANY.name} — RAWMATERIAL INWARD</span>
+              <span className="mobile-text">{COMPANY.name}</span>
             </div>
             <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>
               <span className="desktop-text">Firebase Live Sync • {entries.length} Entries</span>
-              <span style={{display:"none"}} className="mobile-text">{entries.length} Entries</span>
+              <span className="mobile-text">{entries.length} Entries</span>
             </div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>
             <span className="desktop-text">📊 Dashboard</span>
-            <span style={{display:"none"}} className="mobile-text">📊</span>
+            <span className="mobile-text">📊</span>
+          </button>
+          <button style={{...navBtn(false),background:"#1e3a5f"}} onClick={()=>setShowManageParties(v=>!v)}>
+            <span className="desktop-text">🏢 Parties</span>
+            <span className="mobile-text">🏢</span>
           </button>
           <div style={{color:"#94a3b8",fontSize:12,fontFamily:C.mono}} className="desktop-text">{tick}</div>
           <button style={newBtn} onClick={startNew}>+ New</button>
@@ -555,7 +641,7 @@ export default function App(){
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
                         <span style={{fontSize:20}}>📊</span>
                         <div style={{fontSize:14,fontWeight:700,color:C.dark}}>
-                          Party-wise Summary
+                          Party-wise Daily Summary
                         </div>
                       </div>
                       
@@ -603,6 +689,7 @@ export default function App(){
                       {partyWiseSummary.length > 0 && (
                         <div style={{fontSize:12,color:C.mid}}>
                           {partyWiseSummary.reduce((sum, p) => sum + p.count, 0)} vehicles • {" "}
+                          {kg(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0))} kg • {" "}
                           {(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT
                         </div>
                       )}
@@ -618,32 +705,32 @@ export default function App(){
                         </div>
                       ) : (
                         <>
-                          {/* Table for party-wise summary */}
-                          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:16}}>
-                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                          {/* Table for party-wise summary - compact for mobile */}
+                          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:12}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                               <thead>
-                                <tr style={{borderBottom:`2px solid ${C.border}`}}>
-                                  <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase",width:40}}>#</th>
-                                  <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Party Name</th>
-                                  <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Vehicles</th>
-                                  <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Total</th>
+                                <tr style={{background:"#f8fafc",borderBottom:`2px solid ${C.border}`}}>
+                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:28}}>#</th>
+                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
+                                  <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:48}}>Veh</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>MT</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {partyWiseSummary.map((party, index) => (
-                                  <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid ${C.border}`}}>
-                                    <td style={{padding:"12px",fontWeight:600,color:C.mid,fontSize:12}}>{index + 1}</td>
-                                    <td style={{padding:"12px",fontWeight:600,color:C.dark}}>{party.partyName}</td>
-                                    <td style={{padding:"12px",textAlign:"center",fontWeight:600,color:"#2563eb"}}>({party.count})</td>
-                                    <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(party.totalWeight / 1000).toFixed(3)} MT</td>
+                                  <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid #f1f5f9`}}>
+                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
+                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,fontSize:12}}>{party.partyName}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({party.count})</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot>
-                                <tr style={{borderTop:`2px solid ${C.border}`}}>
-                                  <td colSpan="2" style={{padding:"12px",fontWeight:700,color:C.dark}}>Total:</td>
-                                  <td style={{padding:"12px",textAlign:"center",fontWeight:700,color:"#2563eb"}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
-                                  <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)} MT</td>
+                                <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
+                                  <td colSpan="2" style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
+                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
                                 </tr>
                               </tfoot>
                             </table>
@@ -735,25 +822,35 @@ export default function App(){
                         </div>
                       ) : (
                         <>
-                          {/* Table for date summary */}
-                          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:16}}>
-                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                          {/* Table for date summary - compact for mobile */}
+                          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:12}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                               <thead>
-                                <tr style={{borderBottom:`2px solid ${C.border}`}}>
-                                  <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Date</th>
-                                  <th style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Vehicles</th>
-                                  <th style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:11,textTransform:"uppercase"}}>Total Weight</th>
+                                <tr style={{background:"#f8fafc",borderBottom:`2px solid ${C.border}`}}>
+                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.muted,fontSize:10,textTransform:"uppercase"}}>Date</th>
+                                  <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.muted,fontSize:10,textTransform:"uppercase",width:52}}>Veh</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.muted,fontSize:10,textTransform:"uppercase"}}>Weight (kg)</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.muted,fontSize:10,textTransform:"uppercase",width:68}}>MT</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {dateSummary.map((day, index) => (
-                                  <tr key={day.date} style={{borderBottom: index === dateSummary.length - 1 ? "none" : `1px solid ${C.border}`}}>
-                                    <td style={{padding:"12px",fontWeight:600,color:C.dark}}>{fmtDate(day.date)}</td>
-                                    <td style={{padding:"12px",textAlign:"center",fontWeight:600,color:"#2563eb"}}>{day.count}</td>
-                                    <td style={{padding:"12px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono}}>{kg(day.totalWeight)} kg</td>
+                                  <tr key={day.date} style={{borderBottom: index === dateSummary.length - 1 ? "none" : `1px solid #f1f5f9`}}>
+                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,whiteSpace:"nowrap",fontSize:12}}>{fmtDate(day.date)}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>{day.count}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{kg(day.totalWeight)}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(day.totalWeight/1000).toFixed(2)}</td>
                                   </tr>
                                 ))}
                               </tbody>
+                              <tfoot>
+                                <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
+                                  <td style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
+                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>{dateSummary.reduce((s,d)=>s+d.count,0)}</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{kg(dateSummary.reduce((s,d)=>s+d.totalWeight,0))}</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(dateSummary.reduce((s,d)=>s+d.totalWeight,0)/1000).toFixed(2)}</td>
+                                </tr>
+                              </tfoot>
                             </table>
                           </div>
                         </>
@@ -938,6 +1035,33 @@ export default function App(){
                     <div style={roInp}>{tick} (Auto)</div>
                   </div>
                   <FSel label="Weighment By" val={form.weighmentPerson} onChange={v=>setForm(f=>({...f,weighmentPerson:v}))} opts={WEIGHMENT_PERSONS} full/>
+                  
+                  {/* Net Weight Display + Accepted Qty */}
+                  {form.ourGrossWeight && form.ourEmptyWeight && parseFloat(form.ourEmptyWeight) > 0 && parseFloat(form.ourEmptyWeight) < parseFloat(form.ourGrossWeight) && (
+                    <div style={{gridColumn:"1/-1",background:"#0f172a",borderRadius:10,padding:"14px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"center"}}>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:4}}>Net Weight</div>
+                        <div style={{fontSize:22,fontWeight:800,color:"#86efac",fontFamily:C.mono}}>{kg(parseFloat(form.ourGrossWeight)-parseFloat(form.ourEmptyWeight))}</div>
+                        <div style={{fontSize:9,color:"#64748b"}}>kg</div>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <label style={{fontSize:11,fontWeight:700,color:"#94a3b8"}}>Accepted Qty (kg)</label>
+                        <input
+                          style={{...inp,fontWeight:700,fontSize:16,background:"#1e293b",color:"#fbbf24",border:"1.5px solid #334155"}}
+                          type="number"
+                          placeholder="Enter accepted kg"
+                          value={form.acceptedQty}
+                          onChange={e=>setForm(f=>({...f,acceptedQty:e.target.value}))}
+                        />
+                        {form.acceptedQty && (
+                          <div style={{fontSize:10,color:"#94a3b8",textAlign:"center"}}>
+                            {(parseFloat(form.acceptedQty)/1000).toFixed(3)} MT
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{gridColumn:"1/-1",display:"flex",gap:10,justifyContent:"space-between",marginTop:8}}>
                     <button style={secondaryBtn} onClick={()=>setForm(f=>({...f,step:2}))}>← Back</button>
                     <button style={greenBtn} onClick={step3Finish}>✓ Complete</button>
@@ -975,11 +1099,11 @@ export default function App(){
               </div>
 
               <div style={{fontSize:14,fontWeight:700,marginBottom:12,color:"#dc2626"}}>⚖ Weight Details</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20,background:"#0f172a",padding:"16px",borderRadius:10}}>
-                {[{l:"Party Wt",v:kg(selected.partyWeight),c:"#f8fafc"},{l:"Gross Wt",v:kg(selected.ourGrossWeight),c:"#93c5fd"},{l:"Empty Wt",v:kg(selected.ourEmptyWeight),c:"#fca5a5"},{l:"Net Wt",v:kg(selected.netWeight),c:"#86efac"}].map(w=>(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))",gap:10,marginBottom:20,background:"#0f172a",padding:"16px",borderRadius:10}}>
+                {[{l:"Party Wt",v:kg(selected.partyWeight),c:"#f8fafc"},{l:"Gross Wt",v:kg(selected.ourGrossWeight),c:"#93c5fd"},{l:"Empty Wt",v:kg(selected.ourEmptyWeight),c:"#fca5a5"},{l:"Net Wt",v:kg(selected.netWeight),c:"#86efac"},{l:"Accepted Qty",v:selected.acceptedQty!=null?kg(selected.acceptedQty):"—",c:"#fbbf24"}].map(w=>(
                   <div key={w.l} style={{textAlign:"center"}}>
                     <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:4}}>{w.l}</div>
-                    <div style={{fontSize:18,fontWeight:800,color:w.c}}>{w.v}</div>
+                    <div style={{fontSize:16,fontWeight:800,color:w.c}}>{w.v}</div>
                     <div style={{fontSize:9,color:"#64748b"}}>kg</div>
                   </div>
                 ))}
