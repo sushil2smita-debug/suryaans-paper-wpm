@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.3.0";
+const APP_VERSION = "2.4.0";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -154,41 +154,63 @@ export default function App(){
   }, []);
 
   useEffect(()=>{
-    // QUOTA FIX: Two-tier loading strategy
-    // 1. Load last 30 days ONCE (getDocs) — no live listener, saves reads
+    // QUOTA FIX: Smart caching strategy
+    // 1. History (last 30 days) cached in localStorage — loads from Firebase ONCE per day only
     // 2. Live listener ONLY for today — catches new entries instantly
-    
+    // Result: 100+ app opens per day = same reads as 1 open!
+
     const todayDate = nowDate();
-    
-    // One-time fetch for last 30 days (not live — saves massive quota)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoffDate = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+    const CACHE_KEY = "wpm_history_cache";
+    const CACHE_DATE_KEY = "wpm_history_date";
 
-    const historyQuery = query(
-      collection(db, "entries"),
-      where("date", ">=", cutoffDate),
-      where("date", "<", todayDate),
-      orderBy("date", "desc"),
-      orderBy("savedAt", "desc")
-    );
+    // Check if we have today's cache
+    const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
+    const cachedData = localStorage.getItem(CACHE_KEY);
 
-    // Fetch history once
-    getDocs(historyQuery).then((snapshot) => {
-      const historyData = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
-      setEntries(prev => {
-        // Merge with today's entries already loaded
-        const todayEntries = prev.filter(e => e.date === todayDate);
-        const merged = [...todayEntries, ...historyData];
-        return merged;
+    if(cachedDate === todayDate && cachedData){
+      // USE CACHE — zero Firebase reads for history!
+      try{
+        const parsed = JSON.parse(cachedData);
+        setEntries(parsed);
+        setLoading(false);
+        console.log("History loaded from cache — 0 Firebase reads");
+      }catch(e){
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_DATE_KEY);
+      }
+    } else {
+      // FIRST OPEN OF DAY — fetch from Firebase and cache it
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const cutoffDate = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
+
+      const historyQuery = query(
+        collection(db, "entries"),
+        where("date", ">=", cutoffDate),
+        where("date", "<", todayDate),
+        orderBy("date", "desc"),
+        orderBy("savedAt", "desc")
+      );
+
+      getDocs(historyQuery).then((snapshot) => {
+        const historyData = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+        // Save to localStorage cache
+        try{
+          localStorage.setItem(CACHE_KEY, JSON.stringify(historyData));
+          localStorage.setItem(CACHE_DATE_KEY, todayDate);
+        }catch(e){ console.log("Cache save failed:", e); }
+        setEntries(prev => {
+          const todayEntries = prev.filter(e => e.date === todayDate);
+          return [...todayEntries, ...historyData];
+        });
+        setLoading(false);
+      }).catch(e => {
+        console.error("History fetch error:", e);
+        setLoading(false);
       });
-      setLoading(false);
-    }).catch(e => {
-      console.error("History fetch error:", e);
-      setLoading(false);
-    });
+    }
 
-    // Live listener ONLY for today's entries — minimal reads
+    // Live listener ONLY for today's entries — always fresh
     const todayQuery = query(
       collection(db, "entries"),
       where("date", "==", todayDate),
@@ -198,10 +220,18 @@ export default function App(){
     const unsubscribe = onSnapshot(todayQuery, (snapshot) => {
       const todayData = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
       setEntries(prev => {
-        // Replace today's entries, keep history
         const historyEntries = prev.filter(e => e.date !== todayDate);
+        // Update cache with latest today entries merged
+        try{
+          const cached = localStorage.getItem(CACHE_KEY);
+          if(cached){
+            const history = JSON.parse(cached);
+            localStorage.setItem(CACHE_KEY, JSON.stringify([...todayData, ...history]));
+          }
+        }catch(e){}
         return [...todayData, ...historyEntries];
       });
+      setLoading(false);
     }, (error) => {
       console.error("Firebase error:", error);
       showNotif("Failed to connect to Firebase","error");
