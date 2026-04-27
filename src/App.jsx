@@ -829,30 +829,30 @@ export default function App(){
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                               <thead>
                                 <tr style={{background:"#f8fafc",borderBottom:`2px solid ${C.border}`}}>
-                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:28}}>#</th>
-                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
-                                  <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:48}}>Veh</th>
-                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>Net MT</th>
-                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:72}}>Acc MT</th>
+                                  <th style={{padding:"4px 3px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:20}}>#</th>
+                                  <th style={{padding:"4px 3px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
+                                  <th style={{padding:"4px 3px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:36}}>Veh</th>
+                                  <th style={{padding:"4px 3px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:60}}>Net MT</th>
+                                  <th style={{padding:"4px 3px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:60}}>Acc MT</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {partyWiseSummary.map((party, index) => (
                                   <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid #f1f5f9`}}>
-                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
-                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,fontSize:12}}>{party.partyName}</td>
-                                    <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({party.count})</td>
-                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
-                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
+                                    <td style={{padding:"5px 3px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
+                                    <td style={{padding:"5px 3px",fontWeight:600,color:C.dark,fontSize:11,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:110}}>{party.partyName}</td>
+                                    <td style={{padding:"5px 3px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:11}}>({party.count})</td>
+                                    <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
+                                    <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot>
                                 <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
-                                  <td colSpan="2" style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
-                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
-                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
-                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
+                                  <td colSpan="2" style={{padding:"5px 3px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
+                                  <td style={{padding:"5px 3px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
+                                  <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
+                                  <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
                                 </tr>
                               </tfoot>
                             </table>
