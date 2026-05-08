@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.3";
+const APP_VERSION = "2.4.4";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -130,8 +130,6 @@ export default function App(){
   const [partyWiseDate, setPartyWiseDate] = useState(nowDate());
   const [newPartyInput, setNewPartyInput] = useState("");
   const [showManageParties, setShowManageParties] = useState(false);
-  // VIEW MODE: if true, load only last 30 days (saves reads for view-only staff)
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem("wpm_view_mode") === "true");
   // FIX #2 & #3 — partyFilter state removed; FSel now manages its own filter internally
 
   useEffect(()=>{ const t=setInterval(()=>setTick(nowFull()),1000); return()=>clearInterval(t); },[]);
@@ -160,106 +158,62 @@ export default function App(){
     const CACHE_KEY = "wpm_history_cache";
     const CACHE_DATE_KEY = "wpm_history_date";
 
-    // STEP 1: Load history — bust old incomplete cache, fetch ALL entries fresh
-    const CACHE_VERSION = "v3_all"; // bump this version to force fresh fetch when cache logic changes
+    // STEP 1: Load ALL history (cached after first load of the day)
     const loadHistory = () => {
       const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
       const cachedData = localStorage.getItem(CACHE_KEY);
-      const cachedVersion = localStorage.getItem(CACHE_KEY + "_ver");
 
-      // Only use cache if: same day AND same version (version mismatch = old incomplete cache)
-      if(cachedDate === todayDate && cachedData && cachedVersion === CACHE_VERSION){
-        // Cache exists and is current version — zero Firebase reads
+      if(cachedDate === todayDate && cachedData){
+        // Cache exists — zero Firebase reads for all subsequent opens today
         try{
           return Promise.resolve(JSON.parse(cachedData));
         }catch(e){
           localStorage.removeItem(CACHE_KEY);
           localStorage.removeItem(CACHE_DATE_KEY);
-          localStorage.removeItem(CACHE_KEY + "_ver");
         }
       }
-
-      // First open of day — fetch history from Firebase
-      // View Mode ON  → last 30 days only (saves reads for view-only staff)
-      // View Mode OFF → all history (needed for entry staff to generate correct IDs)
-      const isViewMode = localStorage.getItem("wpm_view_mode") === "true";
-      let historyQuery;
-      if(isViewMode){
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const cutoff = thirtyDaysAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
-        historyQuery = query(
-          collection(db, "entries"),
-          where("date", ">=", cutoff),
-          where("date", "<", todayDate),
-          orderBy("date", "desc")
-        );
-      } else {
-        historyQuery = query(
-          collection(db, "entries"),
-          where("date", "<", todayDate),
-          orderBy("date", "desc")
-        );
-      }
-      return getDocs(historyQuery).then((snap) => {
+      // First open of day — fetch ALL history from Firebase and cache it
+      return getDocs(query(
+        collection(db, "entries"),
+        where("date", "<", todayDate)
+      )).then((snap) => {
         const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }))
           .sort((a,b) => (b.date||"").localeCompare(a.date||""));
-
-        // Cache only last 12 months to stay safely under 5MB localStorage limit forever
-        // (12mo × 65 vehicles × 25 days × 400 bytes = ~7.4MB max, but real entries are ~180 bytes avg)
-        // All data is returned to app — only cache is limited, not what you see
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-        const cacheFrom = twelveMonthsAgo.toLocaleDateString("en-CA", {timeZone: "Asia/Kolkata"});
-        const dataToCache = data.filter(d => (d.date||"") >= cacheFrom);
-
-        const saveCache = () => {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(dataToCache));
-          localStorage.setItem(CACHE_DATE_KEY, todayDate);
-          localStorage.setItem(CACHE_KEY + "_ver", CACHE_VERSION); // mark version
-        };
         try{
-          saveCache();
-        }catch(e){
-          try{
-            // Clear ALL old cache keys and retry
-            localStorage.removeItem(CACHE_KEY);
-            localStorage.removeItem(CACHE_DATE_KEY);
-            localStorage.removeItem(CACHE_KEY + "_ver");
-            saveCache();
-          }catch(e2){
-            console.log("localStorage full, running without cache today:", e2);
-          }
-        }
-        return data; // Return ALL data to the app (not just cached portion)
+          localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+          localStorage.setItem(CACHE_DATE_KEY, todayDate);
+        }catch(e){ console.log("Cache full, skipping:", e); }
+        return data;
       });
     };
 
-    // STEP 2: Wait for history FIRST, then start live listener
-    let unsubscribe = () => {};
+    // STEP 2: Start live listener for today only
+    let historyData = [];
 
     loadHistory().then(history => {
-      const historyData = history || [];
-
-      // Now start the live listener — historyData is ready!
-      unsubscribe = onSnapshot(
-        query(collection(db, "entries"), where("date", "==", todayDate)),
-        (snapshot) => {
-          const todayData = snapshot.docs
-            .map(d => ({ firestoreId: d.id, ...d.data() }))
-            .sort((a,b) => (b.savedAt||"").localeCompare(a.savedAt||""));
-          setEntries([...todayData, ...historyData]);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Firebase error:", error);
-          setLoading(false);
-        }
-      );
+      historyData = history || [];
+      setLoading(false);
     }).catch(e => {
       console.error("History load error:", e);
+      historyData = [];
       setLoading(false);
     });
+
+    // Live listener for today — no index needed, single field query
+    const unsubscribe = onSnapshot(
+      query(collection(db, "entries"), where("date", "==", todayDate)),
+      (snapshot) => {
+        const todayData = snapshot.docs
+          .map(d => ({ firestoreId: d.id, ...d.data() }))
+          .sort((a,b) => (b.savedAt||"").localeCompare(a.savedAt||""));
+        setEntries([...todayData, ...historyData]);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firebase error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -608,7 +562,7 @@ export default function App(){
               <span className="mobile-text">{COMPANY.name}</span>
             </div>
             <div style={{color:"#64748b",fontSize:10,textTransform:"uppercase"}}>
-              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries {viewMode ? "• 👁 View Mode" : ""}</span>
+              <span className="desktop-text">Firebase Live Sync • {entries.length} Entries</span>
               <span className="mobile-text">{entries.length} Entries</span>
             </div>
           </div>
@@ -617,19 +571,6 @@ export default function App(){
           <button style={navBtn(page==="dashboard")} onClick={()=>setPage("dashboard")}>
             <span className="desktop-text">📊 Dashboard</span>
             <span className="mobile-text">📊</span>
-          </button>
-          <button style={{...navBtn(false),background:viewMode?"#854d0e":"#1e3a5f",fontSize:11,padding:"6px 10px"}} onClick={()=>{
-            const next = !viewMode;
-            setViewMode(next);
-            localStorage.setItem("wpm_view_mode", next ? "true" : "false");
-            // Clear cache so next reload fetches correct data range
-            localStorage.removeItem("wpm_history_cache");
-            localStorage.removeItem("wpm_history_date");
-            localStorage.removeItem("wpm_history_cache_ver");
-            window.location.reload();
-          }}>
-            <span className="desktop-text">{viewMode ? "👁 View Mode ON" : "👁 View Mode OFF"}</span>
-            <span className="mobile-text">👁</span>
           </button>
           <button style={{...navBtn(false),background:"#1e3a5f"}} onClick={()=>setShowManageParties(v=>!v)}>
             <span className="desktop-text">🏢 Parties</span>
@@ -780,23 +721,38 @@ export default function App(){
                     
                     {/* Second row: Date selector and summary */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                      {/* Date selector */}
+                      {/* Date selector - fixed DD/MM/YYYY format on all devices */}
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
-                        <input 
-                          type="date" 
-                          value={partyWiseDate} 
-                          onChange={(e) => setPartyWiseDate(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
+                        <div style={{position:"relative",display:"inline-block"}}>
+                          <div style={{
                             ...inp,
                             padding:"6px 10px",
                             fontSize:13,
                             fontWeight:600,
                             cursor:"pointer",
-                            minWidth:140
-                          }}
-                        />
+                            minWidth:140,
+                            display:"flex",
+                            alignItems:"center",
+                            justifyContent:"space-between",
+                            gap:8,
+                            background:"#fff"
+                          }}>
+                            <span>{fmtDate(partyWiseDate)}</span>
+                            <span style={{fontSize:10,color:C.muted}}>▼</span>
+                          </div>
+                          <input
+                            type="date"
+                            value={partyWiseDate}
+                            onChange={(e) => setPartyWiseDate(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              position:"absolute",
+                              top:0,left:0,width:"100%",height:"100%",
+                              opacity:0,cursor:"pointer",zIndex:2
+                            }}
+                          />
+                        </div>
                       </div>
                       
                       {/* Summary totals */}
@@ -829,30 +785,30 @@ export default function App(){
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                               <thead>
                                 <tr style={{background:"#f8fafc",borderBottom:`2px solid ${C.border}`}}>
-                                  <th style={{padding:"4px 3px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:20}}>#</th>
-                                  <th style={{padding:"4px 3px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
-                                  <th style={{padding:"4px 3px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:36}}>Veh</th>
-                                  <th style={{padding:"4px 3px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:60}}>Net MT</th>
-                                  <th style={{padding:"4px 3px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:60}}>Acc MT</th>
+                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:28}}>#</th>
+                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
+                                  <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:48}}>Veh</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>Net MT</th>
+                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:72}}>Acc MT</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {partyWiseSummary.map((party, index) => (
                                   <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid #f1f5f9`}}>
-                                    <td style={{padding:"5px 3px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
-                                    <td style={{padding:"5px 3px",fontWeight:600,color:C.dark,fontSize:11,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:110}}>{party.partyName}</td>
-                                    <td style={{padding:"5px 3px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:11}}>({party.count})</td>
-                                    <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
-                                    <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
+                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
+                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,fontSize:12}}>{party.partyName}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({party.count})</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
+                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot>
                                 <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
-                                  <td colSpan="2" style={{padding:"5px 3px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
-                                  <td style={{padding:"5px 3px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
-                                  <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
-                                  <td style={{padding:"5px 3px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
+                                  <td colSpan="2" style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
+                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
+                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
                                 </tr>
                               </tfoot>
                             </table>
