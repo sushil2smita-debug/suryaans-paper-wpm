@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.6";
+const APP_VERSION = "2.4.7";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -931,30 +931,39 @@ export default function App(){
                   {filterParty==="All"&&<input type="text" style={{...inp,width:"100%",maxWidth:200,marginBottom:14}} placeholder="Search party…" value={filterP} onChange={e=>setFilterP(e.target.value)}/>}
                   {filterParty!=="All"&&<div style={{fontSize:12,color:C.muted,marginBottom:14,fontStyle:"italic"}}>Showing entries for: <strong>{filterParty}</strong></div>}
                   <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-                    <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12.5}}>
-                      <thead><tr>{["ID","Date","Vehicle","Party","Net (kg)","Grade","Status","Action"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                      <thead><tr>
+                        <th style={th}>ID</th>
+                        <th style={th}>Date</th>
+                        <th style={{...th,display:"none"}} className="desktop-text">Vehicle</th>
+                        <th style={th}>Party</th>
+                        <th style={th}>Net (kg)</th>
+                        <th style={{...th,display:"none"}} className="desktop-text">Grade</th>
+                        <th style={{...th,display:"none"}} className="desktop-text">Status</th>
+                        <th style={th}>Action</th>
+                      </tr></thead>
                       <tbody>
                         {currentEntries.length===0&&<tr><td colSpan={8} style={{...td,textAlign:"center",padding:40}}>No entries</td></tr>}
                         {currentEntries.map(e=>(
                           <tr key={e.firestoreId||e.id}>
                             <td style={{...td,fontWeight:800,color:"#1e40af",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{e.id}</td>
                             <td style={{...td,whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
-                            <td style={{...td,fontFamily:C.mono,fontWeight:700,whiteSpace:"nowrap"}}>{e.vehicleNo}</td>
-                            <td style={{...td,minWidth:150}}>{e.partyName}</td>
+                            <td style={{...td,fontFamily:C.mono,fontWeight:700,whiteSpace:"nowrap",display:"none"}} className="desktop-text">{e.vehicleNo}</td>
+                            <td style={{...td,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.partyName}</td>
                             <td style={{...td,textAlign:"right",fontWeight:700,whiteSpace:"nowrap"}}>{kg(e.netWeight)}</td>
-                            <td style={td}><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600,whiteSpace:"nowrap"}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
-                            <td style={{...td,whiteSpace:"nowrap"}}><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
+                            <td style={{...td,display:"none"}} className="desktop-text"><span style={{fontSize:10,background:"#eff6ff",color:"#1e40af",padding:"2px 8px",borderRadius:10,fontWeight:600,whiteSpace:"nowrap"}}>{e.materialGrade?.split(" ")[0]||"—"}</span></td>
+                            <td style={{...td,whiteSpace:"nowrap",display:"none"}} className="desktop-text"><span style={badge(e.status)}><span style={bDot(e.status)}></span>{e.status}</span></td>
                             <td style={{...td,whiteSpace:"nowrap"}}>
                               {e.status!=="Completed"&&<button style={actBtnRed} onClick={()=>resume(e)}>Resume</button>}
                               {e.status==="Completed"&&<button style={{...actBtn,marginRight:5}} onClick={()=>{setSelected(e);setPage("view");}}>View</button>}
-                              <button style={{...actBtnRed,marginLeft:5}} onClick={()=>deleteEntry(e)}>🗑 Delete</button>
+                              <button style={{...actBtnRed,marginLeft:5}} onClick={()=>deleteEntry(e)}>🗑</button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}}>💡 Swipe left/right to see all columns</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:8,fontStyle:"italic"}} className="desktop-text">💡 Swipe left/right to see all columns</div>
                   
                   {/* NEW: Pagination Controls */}
                   {totalEntries > 0 && (
