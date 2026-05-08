@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.4";
+const APP_VERSION = "2.4.6";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -726,31 +726,20 @@ export default function App(){
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
                         <div style={{position:"relative",display:"inline-block"}}>
                           <div style={{
-                            ...inp,
-                            padding:"6px 10px",
-                            fontSize:13,
-                            fontWeight:600,
-                            cursor:"pointer",
-                            minWidth:140,
-                            display:"flex",
-                            alignItems:"center",
-                            justifyContent:"space-between",
-                            gap:8,
-                            background:"#fff"
+                            border:`1px solid ${C.border}`,borderRadius:8,
+                            padding:"5px 10px",fontSize:12,fontWeight:600,
+                            cursor:"pointer",minWidth:110,background:"#fff",
+                            display:"flex",alignItems:"center",gap:6,color:C.dark
                           }}>
                             <span>{fmtDate(partyWiseDate)}</span>
-                            <span style={{fontSize:10,color:C.muted}}>▼</span>
+                            <span style={{fontSize:9,color:C.muted}}>▼</span>
                           </div>
                           <input
                             type="date"
                             value={partyWiseDate}
-                            onChange={(e) => setPartyWiseDate(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              position:"absolute",
-                              top:0,left:0,width:"100%",height:"100%",
-                              opacity:0,cursor:"pointer",zIndex:2
-                            }}
+                            onChange={(e)=>setPartyWiseDate(e.target.value)}
+                            onClick={(e)=>e.stopPropagation()}
+                            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}
                           />
                         </div>
                       </div>
@@ -782,33 +771,33 @@ export default function App(){
                         <>
                           {/* Table for party-wise summary - compact for mobile */}
                           <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginTop:12}}>
-                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                               <thead>
                                 <tr style={{background:"#f8fafc",borderBottom:`2px solid ${C.border}`}}>
-                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:28}}>#</th>
-                                  <th style={{padding:"6px 8px",textAlign:"left",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase"}}>Party Name</th>
-                                  <th style={{padding:"6px 8px",textAlign:"center",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:48}}>Veh</th>
-                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.mid,fontSize:10,textTransform:"uppercase",width:72}}>Net MT</th>
-                                  <th style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:10,textTransform:"uppercase",width:72}}>Acc MT</th>
+                                  <th style={{padding:"4px 6px",textAlign:"left",fontWeight:700,color:C.muted,fontSize:9,textTransform:"uppercase",width:24}}>#</th>
+                                  <th style={{padding:"4px 6px",textAlign:"left",fontWeight:700,color:C.muted,fontSize:9,textTransform:"uppercase"}}>Party Name</th>
+                                  <th style={{padding:"4px 6px",textAlign:"center",fontWeight:700,color:C.muted,fontSize:9,textTransform:"uppercase",width:40}}>Veh</th>
+                                  <th style={{padding:"4px 6px",textAlign:"right",fontWeight:700,color:C.muted,fontSize:9,textTransform:"uppercase",width:60}}>Net MT</th>
+                                  <th style={{padding:"4px 6px",textAlign:"right",fontWeight:700,color:"#b45309",fontSize:9,textTransform:"uppercase",width:60}}>Acc MT</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {partyWiseSummary.map((party, index) => (
-                                  <tr key={party.partyName} style={{borderBottom: index === partyWiseSummary.length - 1 ? "none" : `1px solid #f1f5f9`}}>
-                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.muted,fontSize:11}}>{index + 1}</td>
-                                    <td style={{padding:"7px 8px",fontWeight:600,color:C.dark,fontSize:12}}>{party.partyName}</td>
-                                    <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({party.count})</td>
-                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(party.totalWeight / 1000).toFixed(3)}</td>
-                                    <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{party.totalAccepted > 0 ? (party.totalAccepted / 1000).toFixed(3) : "—"}</td>
+                                  <tr key={party.partyName} style={{borderBottom:index===partyWiseSummary.length-1?"none":`1px solid #f1f5f9`}}>
+                                    <td style={{padding:"5px 6px",fontWeight:500,color:C.muted,fontSize:10}}>{index+1}</td>
+                                    <td style={{padding:"5px 6px",fontWeight:600,color:C.dark,fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{party.partyName}</td>
+                                    <td style={{padding:"5px 6px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:11}}>({party.count})</td>
+                                    <td style={{padding:"5px 6px",textAlign:"right",fontWeight:600,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(party.totalWeight/1000).toFixed(3)}</td>
+                                    <td style={{padding:"5px 6px",textAlign:"right",fontWeight:600,color:"#d97706",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{party.totalAccepted>0?(party.totalAccepted/1000).toFixed(3):"—"}</td>
                                   </tr>
                                 ))}
                               </tbody>
                               <tfoot>
                                 <tr style={{borderTop:`2px solid ${C.border}`,background:"#f8fafc"}}>
-                                  <td colSpan="2" style={{padding:"7px 8px",fontWeight:700,color:C.dark,fontSize:12}}>Total</td>
-                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:12}}>({partyWiseSummary.reduce((sum, p) => sum + p.count, 0)})</td>
-                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalWeight, 0) / 1000).toFixed(3)}</td>
-                                  <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:12,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum, p) => sum + p.totalAccepted, 0) / 1000).toFixed(3)}</td>
+                                  <td colSpan="2" style={{padding:"5px 6px",fontWeight:700,color:C.dark,fontSize:11}}>Total</td>
+                                  <td style={{padding:"5px 6px",textAlign:"center",fontWeight:700,color:"#2563eb",fontSize:11}}>({partyWiseSummary.reduce((sum,p)=>sum+p.count,0)})</td>
+                                  <td style={{padding:"5px 6px",textAlign:"right",fontWeight:700,color:"#16a34a",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum,p)=>sum+p.totalWeight,0)/1000).toFixed(3)}</td>
+                                  <td style={{padding:"5px 6px",textAlign:"right",fontWeight:700,color:"#d97706",fontFamily:C.mono,fontSize:11,whiteSpace:"nowrap"}}>{(partyWiseSummary.reduce((sum,p)=>sum+p.totalAccepted,0)/1000).toFixed(3)}</td>
                                 </tr>
                               </tfoot>
                             </table>
