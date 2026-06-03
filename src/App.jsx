@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.6";
+const APP_VERSION = "2.4.7";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -343,7 +343,14 @@ export default function App(){
         remarks: editData.remarks||selected.remarks||"",
       };
       await updateDoc(doc(db,"entries",selected.firestoreId), updates);
-      setSelected({...selected,...updates});
+      // Update selected entry immediately in UI
+      const updatedEntry = {...selected,...updates};
+      setSelected(updatedEntry);
+      // Clear localStorage cache so updated data loads on next open
+      localStorage.removeItem("wpm_history_cache");
+      localStorage.removeItem("wpm_history_date");
+      // Also update entries in state immediately
+      setEntries(prev => prev.map(e => e.firestoreId === selected.firestoreId ? updatedEntry : e));
       setEditMode(false);
       showNotif(`✓ Entry ${selected.id} updated successfully`);
     }catch(e){
@@ -816,26 +823,32 @@ export default function App(){
                       {/* Date selector - DD/MM/YYYY on all devices */}
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
-                        <div style={{position:"relative",display:"inline-block"}}>
+                        <div style={{position:"relative",display:"inline-block",minWidth:120}}>
+                          {/* DD/MM/YYYY label shown on top */}
                           <div style={{
+                            position:"absolute",top:0,left:0,right:0,bottom:0,
                             border:`1px solid ${C.border}`,borderRadius:8,
                             padding:"5px 10px",fontSize:12,fontWeight:600,
-                            minWidth:110,background:"#fff",
-                            display:"flex",alignItems:"center",gap:6,color:C.dark,
-                            pointerEvents:"none",userSelect:"none"
+                            background:"#fff",display:"flex",alignItems:"center",
+                            gap:6,color:C.dark,pointerEvents:"none",zIndex:1
                           }}>
                             <span>{fmtDate(partyWiseDate)}</span>
-                            <span style={{fontSize:9,color:C.muted}}>▼</span>
+                            <span style={{fontSize:9,color:C.muted,marginLeft:"auto"}}>▼</span>
                           </div>
+                          {/* Real input — fully clickable, sits over label */}
                           <input
                             type="date"
                             value={partyWiseDate}
                             onChange={(e)=>setPartyWiseDate(e.target.value)}
                             style={{
-                              position:"absolute",top:0,left:0,
-                              width:"100%",height:"100%",
-                              opacity:0,cursor:"pointer",zIndex:2,
-                              border:"none",background:"transparent"
+                              display:"block",width:"100%",
+                              border:`1px solid ${C.border}`,borderRadius:8,
+                              padding:"5px 10px",fontSize:12,
+                              cursor:"pointer",background:"transparent",
+                              color:"transparent",caretColor:"transparent",
+                              position:"relative",zIndex:2,
+                              WebkitAppearance:"none",MozAppearance:"none",
+                              outline:"none",minWidth:120
                             }}
                           />
                         </div>
