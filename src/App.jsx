@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.7";
+const APP_VERSION = "2.4.8";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -239,11 +239,12 @@ export default function App(){
 
     // STEP 2: Wait for history FIRST, then start live listener
     let unsubscribe = () => {};
+    let unsubscribeSync = () => {};
 
     loadHistory().then(history => {
-      const historyData = history || [];
+      let historyData = history || [];
 
-      // Now start the live listener — historyData is ready!
+      // Live listener for TODAY's entries
       unsubscribe = onSnapshot(
         query(collection(db, "entries"), where("date", "==", todayDate)),
         (snapshot) => {
@@ -258,12 +259,40 @@ export default function App(){
           setLoading(false);
         }
       );
+
+      // Listen for edit sync signal — when any device edits a past entry,
+      // all other devices reload history automatically
+      unsubscribeSync = onSnapshot(
+        doc(db, "config", "sync"),
+        (snap) => {
+          if(!snap.exists()) return;
+          const data = snap.data();
+          const lastEdit = data?.lastEditAt || "";
+          const myLastSeen = localStorage.getItem("wpm_last_sync") || "";
+          if(lastEdit && lastEdit !== myLastSeen){
+            // Another device made an edit — reload history
+            localStorage.removeItem("wpm_history_cache");
+            localStorage.removeItem("wpm_history_date");
+            localStorage.removeItem("wpm_history_cache_ver");
+            localStorage.setItem("wpm_last_sync", lastEdit);
+            // Reload history fresh from Firebase
+            loadHistory().then(newHistory => {
+              historyData = newHistory || [];
+              setEntries(prev => {
+                const todayEntries = prev.filter(e => e.date === todayDate);
+                return [...todayEntries, ...historyData];
+              });
+            });
+          }
+        }
+      );
+
     }).catch(e => {
       console.error("History load error:", e);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); unsubscribeSync(); };
   }, []);
 
   async function saveEntry(entry){
@@ -343,6 +372,10 @@ export default function App(){
         remarks: editData.remarks||selected.remarks||"",
       };
       await updateDoc(doc(db,"entries",selected.firestoreId), updates);
+      // Signal ALL devices to reload history
+      const syncTime = new Date().toISOString();
+      await setDoc(doc(db,"config","sync"), {lastEditAt: syncTime});
+      localStorage.setItem("wpm_last_sync", syncTime);
       // Update selected entry immediately in UI
       const updatedEntry = {...selected,...updates};
       setSelected(updatedEntry);
