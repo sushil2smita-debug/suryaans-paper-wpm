@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.7";
+const APP_VERSION = "2.4.6";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -327,10 +327,14 @@ export default function App(){
     setSaving(true);
     try{
       const accQty = editData.acceptedQty === "" ? null : parseFloat(editData.acceptedQty);
+      const gross = parseFloat(editData.ourGrossWeight)||selected.ourGrossWeight;
+      const empty = parseFloat(editData.ourEmptyWeight)||selected.ourEmptyWeight;
       const updates = {
         partyWeight: parseFloat(editData.partyWeight)||selected.partyWeight,
-        ourGrossWeight: parseFloat(editData.ourGrossWeight)||selected.ourGrossWeight,
-        ourEmptyWeight: parseFloat(editData.ourEmptyWeight)||selected.ourEmptyWeight,
+        ourGrossWeight: gross,
+        ourEmptyWeight: empty,
+        netWeight: gross - empty,
+        weightDiff: (gross - empty) - (parseFloat(editData.partyWeight)||selected.partyWeight),
         acceptedQty: accQty,
         materialGrade: editData.materialGrade||selected.materialGrade,
         moisture: editData.moisture||selected.moisture,
@@ -338,9 +342,6 @@ export default function App(){
         fiberQuality: editData.fiberQuality||selected.fiberQuality,
         remarks: editData.remarks||selected.remarks||"",
       };
-      // Recalculate net weight
-      updates.netWeight = updates.ourGrossWeight - updates.ourEmptyWeight;
-      updates.weightDiff = updates.netWeight - updates.partyWeight;
       await updateDoc(doc(db,"entries",selected.firestoreId), updates);
       setSelected({...selected,...updates});
       setEditMode(false);
@@ -812,15 +813,16 @@ export default function App(){
                     
                     {/* Second row: Date selector and summary */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                      {/* Date selector - DD/MM/YYYY fixed on all devices */}
+                      {/* Date selector - DD/MM/YYYY on all devices */}
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
                         <div style={{position:"relative",display:"inline-block"}}>
                           <div style={{
                             border:`1px solid ${C.border}`,borderRadius:8,
                             padding:"5px 10px",fontSize:12,fontWeight:600,
-                            cursor:"pointer",minWidth:110,background:"#fff",
-                            display:"flex",alignItems:"center",gap:6,color:C.dark
+                            minWidth:110,background:"#fff",
+                            display:"flex",alignItems:"center",gap:6,color:C.dark,
+                            pointerEvents:"none",userSelect:"none"
                           }}>
                             <span>{fmtDate(partyWiseDate)}</span>
                             <span style={{fontSize:9,color:C.muted}}>▼</span>
@@ -829,8 +831,12 @@ export default function App(){
                             type="date"
                             value={partyWiseDate}
                             onChange={(e)=>setPartyWiseDate(e.target.value)}
-                            onClick={(e)=>e.stopPropagation()}
-                            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}
+                            style={{
+                              position:"absolute",top:0,left:0,
+                              width:"100%",height:"100%",
+                              opacity:0,cursor:"pointer",zIndex:2,
+                              border:"none",background:"transparent"
+                            }}
                           />
                         </div>
                       </div>
@@ -1316,11 +1322,10 @@ export default function App(){
                 {editMode&&(
                   <>
                     <button style={secondaryBtn} onClick={()=>setEditMode(false)}>Cancel</button>
-                    <button style={{...greenBtn,padding:"10px 20px",fontSize:13}} onClick={saveEdit}>💾 Save Changes</button>
+                    <button style={{...greenBtn,padding:"10px 20px",fontSize:13}} onClick={saveEdit}>💾 Save</button>
                   </>
                 )}
                 {!viewMode&&!editMode&&<button style={{...actBtnRed,padding:"10px 20px",fontSize:13}} onClick={()=>{deleteEntry(selected);setPage("dashboard");}}>🗑 Delete Entry</button>}
-              </div>
 
               {/* Edit Form */}
               {editMode&&(
@@ -1371,6 +1376,7 @@ export default function App(){
                   )}
                 </div>
               )}
+              </div>
             </div>
           </div>
         )}
