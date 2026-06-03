@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // APP VERSION — bump this number when deploying to force browser cache refresh
-const APP_VERSION = "2.4.5";
+const APP_VERSION = "2.4.6";
 
 // Default parties list — only used on FIRST TIME setup, then stored in Firebase
 const DEFAULT_PARTIES = ["Sri Krishna Traders","Sri Lakshmi Traders","S S Traders","SVS Traders","J.B Traders","JK Paper Ltd.-Harohalli","JK Paper Ltd.-TVM","Sri Lakshmi & Co.","Naveen Traders","Siva Waste Paper Mart","Panoply Packagings Pvt.Ltd.","Vital Paper Products Pvt.Ltd.","Madha Papers","Thirupathy Balaji Traders","IBT Solutions","Harshal Packaging","Horizon Packs Privete Limited","Aruna Industrial Corporation","Siva Traders","Tirumala Papers","Sri Muthukumaran Traders","Venkateswara Traders","Sri Balaji Timber & Hardwares","National Traders","Erai Arul Traders","Kanakadhara Traders","Oji India Packaging PVT.LTD.","S.S TRADERS(Royapuram)","Arudra Traders","Velvin Rengo Containers Pvt.Ltd","Dixon Technologies (India) LTD","AVM Traders","SAM Traders","APA Package","Madha Waste Paper Company","Indo Paper Craft Privet Limited","Mohammed Enterprises","Tharun Traders","Srinivasa Traders","Dioxn Technologies (India) LTD","Ashok Rai Boards","Girnar Packaging","Sri Nivasa Traders","Boxit Packging LLP","Sri Padmavathi Balaji Traders","Balasundaram Waste Paper Mart","Noorani Papers","Canpac Trends Private Limited","Noorani Traders","Sri Selva Vinayagar Traders","Shree Priya Packs","Vamshadhara Paper Mills Ltd.","J T Pack Pvt Ltd","APA Packge","Fine Papers","Siva Waste Paper Company","Aarkay Packaging Industries","Canpac Trends Pvt Ltd","ACE Agencies","Shree Umiya Tradelink","Sri Ganesa Traders","Shweta Print Pack Pvt Ltd","Agarwal Coal Company","HCL Coal International Pvt.Ltd","Earthcon Industries LLP","Mayur International","Amasha Limited","Melosch Export GMBH","K-C International LLC","Greenmove PTE","Internatonal Corton Suppliers Co","Fredmax BVBA","Accel Vanture Trading LLC","GP Hermon Recycling LLC","Kousa International","Eco Earth Elements","Wintrax Logistics","New Port CH International LLC"];
@@ -102,6 +102,8 @@ export default function App(){
   const [page, setPage] = useState("dashboard");
   const [form, setForm] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState({});
   const [notif, setNotif] = useState(null);
   const [tick, setTick] = useState(nowFull());
   const [filterP, setFilterP] = useState("");
@@ -316,6 +318,35 @@ export default function App(){
     } catch(e){
       console.error('Delete error:', e);
       showNotif("Failed to delete entry","error");
+    }
+    setSaving(false);
+  }
+
+  async function saveEdit(){
+    if(!selected?.firestoreId) return;
+    setSaving(true);
+    try{
+      const updates = {
+        partyWeight: parseFloat(editData.partyWeight)||selected.partyWeight,
+        ourGrossWeight: parseFloat(editData.ourGrossWeight)||selected.ourGrossWeight,
+        ourEmptyWeight: parseFloat(editData.ourEmptyWeight)||selected.ourEmptyWeight,
+        acceptedQty: editData.acceptedQty!===""?parseFloat(editData.acceptedQty):null,
+        materialGrade: editData.materialGrade||selected.materialGrade,
+        moisture: editData.moisture||selected.moisture,
+        contamination: editData.contamination||selected.contamination,
+        fiberQuality: editData.fiberQuality||selected.fiberQuality,
+        remarks: editData.remarks||selected.remarks||"",
+      };
+      // Recalculate net weight
+      updates.netWeight = updates.ourGrossWeight - updates.ourEmptyWeight;
+      updates.weightDiff = updates.netWeight - updates.partyWeight;
+      await updateDoc(doc(db,"entries",selected.firestoreId), updates);
+      setSelected({...selected,...updates});
+      setEditMode(false);
+      showNotif(`✓ Entry ${selected.id} updated successfully`);
+    }catch(e){
+      console.error("Edit error:",e);
+      showNotif("Failed to update entry","error");
     }
     setSaving(false);
   }
@@ -780,34 +811,25 @@ export default function App(){
                     
                     {/* Second row: Date selector and summary */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                      {/* Date selector - works on ALL devices desktop+mobile */}
+                      {/* Date selector - DD/MM/YYYY fixed on all devices */}
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <label style={{fontSize:12,fontWeight:600,color:C.mid}}>Date:</label>
-                        <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                          {/* Visible label showing DD/MM/YYYY */}
+                        <div style={{position:"relative",display:"inline-block"}}>
                           <div style={{
                             border:`1px solid ${C.border}`,borderRadius:8,
                             padding:"5px 10px",fontSize:12,fontWeight:600,
                             cursor:"pointer",minWidth:110,background:"#fff",
-                            display:"flex",alignItems:"center",gap:6,color:C.dark,
-                            pointerEvents:"none",position:"absolute",top:0,left:0,
-                            height:"100%",zIndex:1,boxSizing:"border-box"
+                            display:"flex",alignItems:"center",gap:6,color:C.dark
                           }}>
                             <span>{fmtDate(partyWiseDate)}</span>
                             <span style={{fontSize:9,color:C.muted}}>▼</span>
                           </div>
-                          {/* Actual date input — transparent but fully clickable */}
                           <input
                             type="date"
                             value={partyWiseDate}
                             onChange={(e)=>setPartyWiseDate(e.target.value)}
-                            style={{
-                              border:`1px solid ${C.border}`,borderRadius:8,
-                              padding:"5px 10px",fontSize:12,fontWeight:600,
-                              cursor:"pointer",minWidth:110,background:"transparent",
-                              color:"transparent",zIndex:2,position:"relative",
-                              WebkitAppearance:"none",outline:"none"
-                            }}
+                            onClick={(e)=>e.stopPropagation()}
+                            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}
                           />
                         </div>
                       </div>
@@ -1273,9 +1295,81 @@ export default function App(){
               </div>
 
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-                <button style={secondaryBtn} onClick={()=>setPage("dashboard")}>Close</button>
-                <button style={{...actBtnRed,padding:"10px 20px",fontSize:13}} onClick={()=>{deleteEntry(selected);setPage("dashboard");}}>🗑 Delete Entry</button>
+                <button style={secondaryBtn} onClick={()=>{setPage("dashboard");setEditMode(false);}}>Close</button>
+                {!viewMode&&!editMode&&(
+                  <button style={{...actBtn,padding:"10px 20px",fontSize:13,background:"#1e40af"}} onClick={()=>{
+                    setEditData({
+                      partyWeight:selected.partyWeight||"",
+                      ourGrossWeight:selected.ourGrossWeight||"",
+                      ourEmptyWeight:selected.ourEmptyWeight||"",
+                      acceptedQty:selected.acceptedQty!=null?selected.acceptedQty:"",
+                      materialGrade:selected.materialGrade||"",
+                      moisture:selected.moisture||"",
+                      contamination:selected.contamination||"",
+                      fiberQuality:selected.fiberQuality||"",
+                      remarks:selected.remarks||"",
+                    });
+                    setEditMode(true);
+                  }}>✏️ Edit</button>
+                )}
+                {editMode&&(
+                  <>
+                    <button style={secondaryBtn} onClick={()=>setEditMode(false)}>Cancel</button>
+                    <button style={{...greenBtn,padding:"10px 20px",fontSize:13}} onClick={saveEdit}>💾 Save Changes</button>
+                  </>
+                )}
+                {!viewMode&&!editMode&&<button style={{...actBtnRed,padding:"10px 20px",fontSize:13}} onClick={()=>{deleteEntry(selected);setPage("dashboard");}}>🗑 Delete Entry</button>}
               </div>
+
+              {/* Edit Form */}
+              {editMode&&(
+                <div style={{marginTop:20,background:"#f8fafc",borderRadius:12,padding:16,border:"2px solid #1e40af"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#1e40af",marginBottom:14}}>✏️ Edit Entry — {selected.id}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    {[
+                      {l:"Party Weight (kg)",k:"partyWeight",type:"number"},
+                      {l:"Gross Weight (kg)",k:"ourGrossWeight",type:"number"},
+                      {l:"Empty Weight (kg)",k:"ourEmptyWeight",type:"number"},
+                      {l:"Accepted Qty (kg)",k:"acceptedQty",type:"number"},
+                      {l:"Material Grade",k:"materialGrade",type:"text"},
+                      {l:"Moisture",k:"moisture",type:"text"},
+                      {l:"Contamination",k:"contamination",type:"text"},
+                      {l:"Fiber Quality",k:"fiberQuality",type:"text"},
+                    ].map(f=>(
+                      <div key={f.k}>
+                        <label style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",display:"block",marginBottom:4}}>{f.l}</label>
+                        <input
+                          type={f.type}
+                          value={editData[f.k]}
+                          onChange={e=>setEditData(d=>({...d,[f.k]:e.target.value}))}
+                          style={{...inp,width:"100%",fontSize:13,fontWeight:600,
+                            border:f.k==="acceptedQty"?"2px solid #f59e0b":"1.5px solid #e2e8f0",
+                            background:f.k==="acceptedQty"?"#fffbeb":"#fff"
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <div style={{gridColumn:"1/-1"}}>
+                      <label style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",display:"block",marginBottom:4}}>Remarks</label>
+                      <input type="text" value={editData.remarks} onChange={e=>setEditData(d=>({...d,remarks:e.target.value}))} style={{...inp,width:"100%",fontSize:13}}/>
+                    </div>
+                  </div>
+                  {editData.ourGrossWeight&&editData.ourEmptyWeight&&(
+                    <div style={{marginTop:12,background:"#0f172a",borderRadius:8,padding:"10px 14px",display:"flex",gap:20,justifyContent:"center"}}>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase"}}>New Net Weight</div>
+                        <div style={{fontSize:18,fontWeight:800,color:"#86efac"}}>{kg(parseFloat(editData.ourGrossWeight)-parseFloat(editData.ourEmptyWeight))} kg</div>
+                      </div>
+                      {editData.acceptedQty&&(
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase"}}>Accepted Qty</div>
+                          <div style={{fontSize:18,fontWeight:800,color:"#fbbf24"}}>{kg(parseFloat(editData.acceptedQty))} kg</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
